@@ -246,6 +246,7 @@
   let layoutStyle = null;
   let layoutActive = false;
   let layoutSig = '';
+  let layoutGrid = null;
 
   function applyMainLayout() {
     const { mode, list } = getUnits();
@@ -259,6 +260,8 @@
     if (sig === layoutSig) return;
     layoutSig = sig;
     layoutActive = ok;
+    if (layoutGrid && layoutGrid !== grid) layoutGrid.style.removeProperty('--cursor-image');
+    layoutGrid = ok ? grid : null;
     if (!layoutStyle) {
       layoutStyle = document.createElement('style');
       layoutStyle.id = 'crdmm-layout';
@@ -276,6 +279,57 @@
 [data-crdmm-unit]{grid-area:1/1/2/2!important;width:${w}!important;height:${h}!important;position:relative!important;z-index:1!important;opacity:0!important}
 [data-crdmm-unit] canvas{width:${w}!important;height:${h}!important}
 [data-crdmm-unit="${idx}"]{z-index:2!important;opacity:1!important}`;
+    updateCursor();
+  }
+
+  // ---------------------------------------------------------------- remote cursor
+  //
+  // CRD shows the remote cursor as a CSS cursor: a --cursor-image variable holding
+  // image-set(url(...) <R>x) <hotX> <hotY>, auto, where R = remote pixels per CSS pixel
+  // for CRD's own canvas size. Wherever a display is drawn at another size (the
+  // enlarged main-tab display, the popups) R and the hotspot are recomputed, or the
+  // cursor comes out too small or too big. Popups don't get CRD's cursor at all, so
+  // it's copied there, which also makes link hands, text beams etc. show up.
+
+  let cursorHost = null;
+  let cursorObserver = null;
+
+  function findCursorHost() {
+    if (cursorHost && cursorHost.isConnected) return cursorHost;
+    const u = getUnits().list[0];
+    let el = u && u.el;
+    while (el && !(el.style && el.style.getPropertyValue('--cursor-image'))) el = el.parentElement;
+    cursorHost = el || null;
+    if (cursorObserver) cursorObserver.disconnect();
+    if (cursorHost) {
+      cursorObserver = new MutationObserver(updateCursor);
+      cursorObserver.observe(cursorHost, { attributes: true, attributeFilter: ['style'] });
+    }
+    return cursorHost;
+  }
+
+  const CURSOR_RE = /^\s*image-set\(([\s\S]*\))\s+([\d.]+)x\)\s+(-?[\d.]+)\s+(-?[\d.]+)\s*,\s*([\w-]+)\s*$/;
+
+  // pxPerRemote: CSS pixels one remote pixel takes up where the cursor will be shown.
+  function scaleCursor(value, pxPerRemote) {
+    const m = CURSOR_RE.exec(value);
+    if (!m || !(pxPerRemote > 0)) return value || 'auto';
+    const res = +m[2], newRes = 1 / pxPerRemote;
+    const k = res / newRes; // hotspot is in CSS px of the image at its resolution
+    return `image-set(${m[1]} ${newRes}x) ${(+m[3] * k).toFixed(2)} ${(+m[4] * k).toFixed(2)}, ${m[5]}`;
+  }
+
+  function updateCursor() {
+    const host = findCursorHost();
+    if (!host) return;
+    const value = host.style.getPropertyValue('--cursor-image');
+    const { list } = getUnits();
+    if (layoutGrid) {
+      const m = list[settings.mainDisplay];
+      const w = m && m.el.getBoundingClientRect().width;
+      if (w) layoutGrid.style.setProperty('--cursor-image', scaleCursor(value, w / m.W));
+    }
+    for (const v of viewers.values()) v.setCursor && v.setCursor(value);
   }
 
   // ---------------------------------------------------------------- input
@@ -286,10 +340,24 @@
   // not check isTrusted. So plain DOM events dispatched on a display's canvas reach
   // the host like real input, also for canvases hidden by the main-tab layout.
 
+  // CRD's first input filter drops everything except clicks and drags while its
+  // desktop doesn't have focus, and it loses focus as soon as the user clicks into a
+  // viewer. So after each real blur, a focus event is replayed on the display's
+  // container (the element CRD listens on) before the next forwarded input.
+  let crdNeedsFocus = !document.hasFocus();
+  window.addEventListener('blur', () => { crdNeedsFocus = true; });
+  window.addEventListener('focus', () => { crdNeedsFocus = false; });
+  function wakeCrd(el) {
+    if (!crdNeedsFocus || !el.parentElement) return;
+    crdNeedsFocus = false;
+    el.parentElement.dispatchEvent(new FocusEvent('focus', { composed: true, view: window }));
+  }
+
   const BUTTON_BITS = [1, 4, 2, 8, 16]; // MouseEvent.button -> MouseEvent.buttons bit
   const mods = (e) => ({ ctrlKey: !!e.ctrlKey, shiftKey: !!e.shiftKey, altKey: !!e.altKey, metaKey: !!e.metaKey });
 
   function fireMouse(el, type, p, e, button = 0) {
+    wakeCrd(el);
     el.dispatchEvent(new MouseEvent(type, {
       bubbles: true, cancelable: true, composed: true, view: window,
       clientX: p.x, clientY: p.y, screenX: window.screenX + p.x, screenY: window.screenY + p.y,
@@ -298,6 +366,7 @@
   }
 
   function fireWheel(el, p, e) {
+    wakeCrd(el);
     el.dispatchEvent(new WheelEvent('wheel', {
       bubbles: true, cancelable: true, composed: true, view: window,
       clientX: p.x, clientY: p.y, deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode,
@@ -307,6 +376,7 @@
 
   // CRD maps keys by KeyboardEvent.code (to USB codes), which survives re-dispatch.
   function fireKey(el, type, k, e) {
+    wakeCrd(el);
     el.dispatchEvent(new KeyboardEvent(type, {
       bubbles: true, cancelable: true, composed: true, view: window,
       key: k.key, code: k.code, location: k.location, repeat: !!k.repeat, ...mods(e),
@@ -367,6 +437,10 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       Object.assign(clip.style, { left: offX + 'px', top: offY + 'px', width: rect.w * s + 'px', height: rect.h * s + 'px' });
       Object.assign(v.style, { left: -rect.x * s + 'px', top: -rect.y * s + 'px', width: W * s + 'px', height: H * s + 'px' });
       viewer.geom = { s, offX, offY };
+      updateCursor();
+    };
+    viewer.setCursor = (value) => {
+      if (viewer.geom) stage.style.cursor = scaleCursor(value, viewer.geom.s);
     };
 
     // Viewer coordinates -> CSS pixels in the CRD tab, on the element showing this display.
