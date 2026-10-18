@@ -20,7 +20,7 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     sendResponse({ ok: true });
   }
   if (msg.type === 'toggleWindowFullscreen') {
-    if (sender.tab) toggleWindowFullscreen(sender.tab.windowId).then(() => sendResponse({ ok: true }));
+    if (sender.tab) toggleWindowFullscreen(sender.tab.windowId).then((on) => sendResponse({ on }));
     return true;
   }
   if (msg.type === 'cancelExpect') {
@@ -55,16 +55,38 @@ chrome.windows.onCreated.addListener((win) => {
 // page's own fullscreen whenever a popup it opened gets focus, which kicks the CRD tab
 // out of fullscreen as soon as the user clicks into a viewer; window fullscreen stays.
 // F11 itself can't be used: in a CRD session it's sent to the remote machine.
-const restoreState = new Map(); // windowId -> state to return to
+const restoreState = new Map(); // windowId -> state to return to, for windows we made fullscreen
 async function toggleWindowFullscreen(windowId) {
   const win = await chrome.windows.get(windowId);
-  if (win.state === 'fullscreen') {
-    await chrome.windows.update(windowId, { state: restoreState.get(windowId) || 'maximized' });
-  } else {
-    restoreState.set(windowId, win.state === 'minimized' ? 'normal' : win.state);
+  const on = !restoreState.has(windowId);
+  if (on) {
+    restoreState.set(windowId, win.state === 'fullscreen' || win.state === 'minimized' ? 'maximized' : win.state);
     await chrome.windows.update(windowId, { state: 'fullscreen' });
+  } else {
+    const state = restoreState.get(windowId);
+    restoreState.delete(windowId);
+    await chrome.windows.update(windowId, { state });
   }
+  notifyWindowFullscreen(windowId, on);
+  return on;
 }
+
+// The content script layers the page's own fullscreen (for keyboard lock) on top of
+// window fullscreen, so it needs to know when window fullscreen starts and ends.
+async function notifyWindowFullscreen(windowId, on) {
+  const tabs = await chrome.tabs.query({ windowId });
+  for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: 'windowFullscreen', on }, () => void chrome.runtime.lastError);
+}
+
+// Left fullscreen some other way (window closed, OS, Chrome dropping it).
+chrome.windows.onBoundsChanged.addListener(async (win) => {
+  if (!restoreState.has(win.id)) return;
+  const w = await chrome.windows.get(win.id).catch(() => null);
+  if (w && w.state === 'fullscreen') return;
+  restoreState.delete(win.id);
+  notifyWindowFullscreen(win.id, false);
+});
+chrome.windows.onRemoved.addListener((id) => restoreState.delete(id));
 
 function togglePanel(tabId) {
   if (tabId == null) return;

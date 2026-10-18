@@ -466,11 +466,14 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
 #msg{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;color:#ddd;
   font:14px/1.5 system-ui,sans-serif;text-align:center;padding:16px 20px;background:rgba(255,255,255,.08);
   border-radius:8px;display:none}
+#note{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);max-width:70%;color:#fff;
+  font:600 16px/1.5 system-ui,sans-serif;text-align:center;background:rgba(32,33,36,.92);padding:12px 18px;
+  border-radius:8px;transition:opacity .6s;opacity:0;pointer-events:none}
 #tag{position:fixed;top:12px;left:12px;color:#fff;font:600 13px system-ui,sans-serif;
   background:rgba(26,115,232,.92);padding:6px 10px;border-radius:6px;transition:opacity .6s;pointer-events:none}
 </style></head><body>
 <div id="stage"><div id="clip"><video id="v" autoplay muted playsinline disablepictureinpicture></video></div></div>
-<div id="msg"></div><div id="tag">Màn hình từ xa ${n}</div>
+<div id="msg"></div><div id="tag">Màn hình từ xa ${n}</div><div id="note"></div>
 </body></html>`;
 
   function createViewer(index, win) {
@@ -480,6 +483,15 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     const v = $('v'), clip = $('clip'), stage = $('stage'), msg = $('msg');
     const viewer = { index, win, geom: null, sig: '', pressed: new Map(), buttons: 0, lastPoint: null };
     setTimeout(() => { $('tag').style.opacity = '0'; }, 2500);
+    let noteTimer = 0, lastNote = '';
+    const showNote = (text) => {
+      if (text === lastNote) return; // only when the situation changes
+      lastNote = text;
+      const note = $('note');
+      note.textContent = text; note.style.opacity = '1';
+      clearTimeout(noteTimer);
+      noteTimer = setTimeout(() => { note.style.opacity = '0'; }, 4000);
+    };
 
     const showMsg = (t) => { msg.textContent = t; msg.style.display = 'block'; clip.style.display = 'none'; viewer.sig = ''; };
     const hideMsg = () => { msg.style.display = 'none'; clip.style.display = ''; };
@@ -531,11 +543,20 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     // the page sees them. The Keyboard Lock API captures them, but only while the page
     // itself is fullscreen (requestFullscreen, not F11), which needs a click or key press.
     const lockKeys = () => {
-      if (!settings.keyboardLock || doc.fullscreenElement) return;
+      if (!settings.keyboardLock) {
+        showNote('Phím hệ thống chưa được khóa: ô "Gửi cả phím hệ thống" trong bảng điều khiển đang tắt.');
+        return;
+      }
       const kb = win.navigator.keyboard;
-      doc.documentElement.requestFullscreen({ navigationUI: 'hide' })
-        .then(() => (kb && kb.lock ? kb.lock() : null))
-        .catch(() => {});
+      // lock() is cheap to repeat, and the popup may already be fullscreen without a
+      // lock (e.g. entered before the option was turned on), so always ask for it.
+      (doc.fullscreenElement ? Promise.resolve() : doc.documentElement.requestFullscreen({ navigationUI: 'hide' }))
+        .then(() => {
+          if (!kb || !kb.lock) throw new Error('trình duyệt không hỗ trợ Keyboard Lock');
+          return kb.lock();
+        })
+        .then(() => showNote('Đã khóa phím hệ thống · giữ Esc để thoát'))
+        .catch((err) => showNote('Không khóa được phím hệ thống: ' + (err && err.message || err)));
     };
 
     const onPointer = (e) => {
@@ -583,7 +604,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     win.addEventListener('keydown', (e) => {
       if (e.key === 'F11') return; // leave fullscreen toggle to the browser
       e.preventDefault();
-      if (e.key !== 'Escape') lockKeys();
+      if (e.key !== 'Escape' && !doc.fullscreenElement) lockKeys();
       const el = target();
       if (!el) return;
       const k = { key: e.key, code: e.code, location: e.location, repeat: e.repeat };
@@ -753,7 +774,8 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     $('collapse').onclick = () => { settings.collapsed = !settings.collapsed; save(); applyVisibility(); };
     $('hide').onclick = () => { panelHidden = true; applyVisibility(); };
     $('openAll').onclick = openAll;
-    $('winFs').onclick = () => send({ type: 'toggleWindowFullscreen' });
+    // The click is a user gesture, so the page fullscreen + keyboard lock can start now.
+    $('winFs').onclick = () => send({ type: 'toggleWindowFullscreen' }).then((r) => r && setWindowFullscreen(r.on));
     $('closeAll').onclick = closeAll;
     ui.layout.onchange = () => { settings.layout = ui.layout.value; save(); refreshAll(); };
     ui.count.onchange = () => { settings.count = clamp(parseInt(ui.count.value, 10) || 1, 1, 8); save(); refreshAll(); };
@@ -886,7 +908,31 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
 
   // ---------------------------------------------------------------- wiring
 
+  // ---------------------------------------------------------------- tab fullscreen
+  //
+  // Window fullscreen (background.js) survives focusing a viewer, but leaves system
+  // keys (Win, Alt+Tab…) to the local OS while CRD also forwards them. Keyboard Lock
+  // fixes that but needs the page's own fullscreen, which Chrome drops whenever a
+  // viewer gets focus. So the page fullscreen + lock is layered on top and re-entered
+  // on the next click or key press in this tab.
+
+  let windowFullscreen = false;
+  function lockTabKeys() {
+    if (!windowFullscreen || document.fullscreenElement) return;
+    document.documentElement.requestFullscreen({ navigationUI: 'hide' })
+      .then(() => navigator.keyboard && navigator.keyboard.lock && navigator.keyboard.lock())
+      .catch(() => {});
+  }
+  function setWindowFullscreen(on) {
+    windowFullscreen = on;
+    if (on) lockTabKeys();
+    else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+  }
+  window.addEventListener('pointerdown', (e) => { if (e.isTrusted) lockTabKeys(); }, true);
+  window.addEventListener('keydown', (e) => { if (e.isTrusted && e.key !== 'Escape') lockTabKeys(); }, true);
+
   chrome.runtime.onMessage.addListener((msg) => {
+    if (msg.type === 'windowFullscreen') setWindowFullscreen(msg.on);
     if (msg.type !== 'togglePanel') return;
     if (isVisible()) {
       panelHidden = true;

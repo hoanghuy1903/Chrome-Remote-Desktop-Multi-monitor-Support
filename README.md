@@ -33,7 +33,8 @@ Dùng nút **"Toàn màn hình tab này"** trong bảng điều khiển hoặc p
 
 - Nút Full-screen của CRD dùng chế độ toàn màn hình của trang. Chrome tự tắt chế độ này mỗi khi bạn bấm vào một popup do trang đó mở (quy tắc an ninh của Chrome), nên màn 1 sẽ bị thoát.
 - Trong phiên CRD, phím F11 được gửi sang máy từ xa chứ không tới Chrome trên máy bạn.
-- Nút của extension đưa cả cửa sổ vào toàn màn hình (giống F11), nên giữ nguyên khi bạn chuyển sang popup. Đổi lại, ở tab CRD các phím hệ thống (Win, Alt+Tab…) sẽ tác động lên máy bạn, không gửi sang máy từ xa.
+- Nút của extension đưa cả cửa sổ vào toàn màn hình (giống F11), nên giữ nguyên khi bạn chuyển sang popup.
+- Để các phím hệ thống (Win, Alt+Tab…) ở tab CRD chỉ gửi sang máy từ xa, extension bật thêm khóa phím mỗi khi bạn bấm chuột hoặc gõ phím trong tab CRD. Khi bạn chuyển sang popup, Chrome tắt khóa phím của tab, và lần bấm tiếp theo vào tab sẽ bật lại.
 
 ### Giữ một màn hình ở tab CRD
 
