@@ -1,73 +1,76 @@
 # CRD Multi-Monitor
 
-Extension cho Chrome giúp Chrome Remote Desktop (bản web, `remotedesktop.google.com`) hiển thị **mỗi màn hình của máy từ xa trên một màn hình riêng của máy bạn**.
+A Chrome extension that lets Chrome Remote Desktop (the web client at `remotedesktop.google.com`) show **each display of the remote computer on its own screen of your computer**.
 
-## Cách hoạt động
+## How it works
 
-1. Khi bạn chọn **Show all displays**, CRD nhận một luồng video riêng (WebRTC) cho mỗi màn hình từ xa và vẽ mỗi luồng vào một `<canvas>`, đặt cạnh nhau trong tab.
-2. Extension ghép từng canvas với luồng video cấp hình cho nó (bằng cách so sánh ảnh thu nhỏ), rồi mở cho mỗi màn hình từ xa một cửa sổ popup phát thẳng luồng đó. Không phải mã hóa lại, nên hình giữ nguyên chất lượng.
-3. Popup được chuyển sang màn hình cục bộ bạn chọn (qua `chrome.windows` + `chrome.system.display`) và có thể tự bật toàn màn hình.
-4. Chuột, cuộn và bàn phím trong popup được đổi sang tọa độ của canvas tương ứng trong tab CRD rồi gửi vào canvas đó dưới dạng sự kiện DOM bình thường. CRD xác định màn hình từ canvas nhận sự kiện và tính vị trí từ khung của canvas, không kiểm tra sự kiện là thật hay giả, nên gửi sang máy từ xa như input thật. Không cần quyền debugger, nên Chrome không hiện thanh cảnh báo nào.
+1. With **Show all displays**, CRD receives a separate WebRTC video stream for each remote display and paints each one into its own `<canvas>`, side by side in the tab.
+2. The extension pairs every canvas with the video stream that feeds it (by comparing small thumbnails) and opens one pop-up window per remote display that plays that stream directly. Nothing is re-encoded, so the picture keeps its full quality.
+3. Each pop-up is moved to the local screen you pick (via `chrome.windows` + `chrome.system.display`) and can go fullscreen automatically.
+4. Mouse, wheel and keyboard input in a pop-up is mapped to the matching canvas in the CRD tab and dispatched there as ordinary DOM events. CRD works out the display from the canvas that receives the event and the position from that canvas's rect, and doesn't check whether events are trusted, so they reach the remote computer like real input. No debugger permission is needed, so Chrome shows no warning bar.
 
-Nếu CRD chỉ hiển thị một khung hình ghép (bản cũ hoặc giao diện khác), extension cắt khung đó thành nhiều vùng theo phần **Bố cục**.
+If CRD shows a single stitched picture instead (older versions or another layout), the extension cuts it into regions according to the **Layout** setting.
 
-## Cài đặt
+## Installation
 
-1. Mở `chrome://extensions`.
-2. Bật **Developer mode** (góc trên bên phải).
-3. Bấm **Load unpacked** rồi chọn thư mục này.
+1. Open `chrome://extensions`.
+2. Turn on **Developer mode** (top right).
+3. Click **Load unpacked** and pick this folder.
 
-Sau mỗi lần sửa file: bấm nút tải lại ↻ ở thẻ extension, **rồi tải lại tab CRD** (F5). Tab đang mở vẫn chạy bản cũ cho tới khi được tải lại.
+After changing any file: click the reload button ↻ on the extension's card, **then reload the CRD tab** (F5). An open tab keeps running the old version until it is reloaded.
 
-## Sử dụng
+## Usage
 
-1. Kết nối tới máy từ xa trên `remotedesktop.google.com`.
-2. Mở bảng bên của CRD → **Displays** → chọn **Show all displays**.
-3. Mở bảng bên của CRD (mũi tên ở mép phải): mục **Multi-Monitor** nằm ngay dưới mục Displays. Bấm biểu tượng extension hoặc **Alt+Shift+M** để mở thẳng tới mục này.
-4. Với mỗi "Màn hình từ xa", chọn màn hình trên máy bạn sẽ hiển thị nó, rồi bấm **Mở** (hoặc **Mở tất cả**).
-5. Thoát toàn màn hình bằng **F11** (hoặc **giữ Esc** nếu đang khóa phím hệ thống, xem dưới). Đóng popup như một cửa sổ bình thường.
+1. Connect to the remote computer on `remotedesktop.google.com`.
+2. Open CRD's side panel (the arrow on the right edge) → **Displays** → choose **Show all displays**.
+3. The **Multi-Monitor** section sits right below **Displays** in the same side panel. The extension icon or **Alt+Shift+M** opens the side panel straight at it.
+4. For each "Remote display", pick the local screen to show it on, then click **Open** (or **Open all**).
+5. Close a pop-up like any other window. To leave a pop-up's fullscreen while system keys are captured, **hold Esc** for about 2 seconds.
 
-### Toàn màn hình cho tab CRD
+Dragging a window across displays works in both directions (CRD tab → pop-up and back): while a mouse button is held, the extension follows the pointer onto whichever display is under it.
 
-Dùng nút **"Toàn màn hình tab này"** trong mục Multi-Monitor hoặc phím **Alt+Shift+F**. Nếu ô **"Tự bật toàn màn hình khi mở"** được chọn, bấm **Mở tất cả** cũng tự đưa tab này vào toàn màn hình. Đừng dùng nút Full-screen của CRD hay phím F11, vì:
+### Fullscreen for the CRD tab
 
-- Nút Full-screen của CRD dùng chế độ toàn màn hình của trang. Chrome tự tắt chế độ này mỗi khi bạn bấm vào một popup do trang đó mở (quy tắc an ninh của Chrome), nên màn 1 sẽ bị thoát.
-- Trong phiên CRD, phím F11 được gửi sang máy từ xa chứ không tới Chrome trên máy bạn.
-- Nút của extension đưa cả cửa sổ vào toàn màn hình (giống F11), nên giữ nguyên khi bạn chuyển sang popup.
-- Để các phím hệ thống (Win, Alt+Tab…) ở tab CRD chỉ gửi sang máy từ xa, extension bật thêm khóa phím mỗi khi bạn bấm chuột hoặc gõ phím trong tab CRD. Khi bạn chuyển sang popup, Chrome tắt khóa phím của tab, và lần bấm tiếp theo vào tab sẽ bật lại.
+Use **"Fullscreen this tab"** in the Multi-Monitor section or **Alt+Shift+F**. With **"Go fullscreen when opening"** checked, **Open all** also puts this tab into fullscreen. Don't use CRD's own Full-screen button or F11:
 
-### Giữ một màn hình ở tab CRD
+- CRD's Full-screen button uses the page's own fullscreen. Chrome ends it whenever you click into a pop-up opened by that page (a Chrome security rule), so the main display would drop out of fullscreen.
+- During a CRD session, F11 is sent to the remote computer, not to Chrome on yours.
+- The extension's button puts the whole window into fullscreen (like F11), which stays on when you switch to a pop-up.
+- So that system keys (Win, Alt+Tab…) in the CRD tab go only to the remote computer, the extension also turns on Keyboard Lock whenever you click or type in the CRD tab. When you switch to a pop-up, Chrome releases the tab's lock, and the next click in the tab turns it back on.
 
-Ô **"Tab này hiển thị"** trong mục Multi-Monitor (mặc định: *Chỉ màn hình từ xa 1*) cho tab CRD chỉ hiện một màn hình, phóng to vừa tab. Các màn hình còn lại chỉ xem qua popup; **Mở tất cả** sẽ bỏ qua màn hình đang ở tab.
+### Keeping one display in the CRD tab
 
-- Trên tab CRD bạn thao tác như CRD gốc.
-- Các màn hình kia vẫn nằm trong tab nhưng trong suốt, ngay dưới màn hình đang hiện. Input từ popup được gửi thẳng vào canvas của màn hình đó, nên không ảnh hưởng đến màn hình đang hiện.
-- Chọn *Tất cả màn hình (như CRD gốc)* để trở về cách hiển thị ban đầu.
+**"This tab shows"** in the Multi-Monitor section (default: *Only remote display 1*) makes the CRD tab show a single display, scaled to fill the tab. The other displays are only shown in pop-ups; **Open all** skips the display that is in the tab.
 
-### Phím hệ thống (Win, Alt+Tab, Alt+F4, Ctrl+W…)
+- In the CRD tab you work exactly as in stock CRD.
+- The other displays stay in the tab, transparent, right under the visible one. Input from their pop-ups is dispatched straight to their canvases, so it doesn't affect the visible display.
+- Choose *All displays (like stock CRD)* to go back to the original layout.
 
-Bình thường Windows và Chrome xử lý các tổ hợp này trước khi trang web nhận được. Khi bật **"Gửi cả phím hệ thống"** trong mục Multi-Monitor (mặc định bật), popup dùng Keyboard Lock API để giữ chúng lại và gửi sang máy từ xa.
+### System keys (Win, Alt+Tab, Alt+F4, Ctrl+W…)
 
-- Keyboard Lock chỉ hoạt động khi trang ở chế độ toàn màn hình của trang (không phải F11). Vì vậy lần đầu bạn bấm chuột hoặc gõ phím vào popup, popup sẽ tự vào chế độ đó.
-- Muốn thoát: **giữ Esc** khoảng 2 giây. Nhấn Esc ngắn vẫn được gửi sang máy từ xa.
-- Trong lúc khóa, Alt+Tab và phím Win tác động lên máy từ xa. Muốn chuyển sang cửa sổ khác trên máy bạn, hãy dùng chuột hoặc thoát toàn màn hình trước.
-- **Ctrl+Alt+Del** không bao giờ bắt được, vì Windows dành riêng tổ hợp này. Dùng nút **Press Ctrl+Alt+Del** trong bảng bên của CRD.
+Normally Windows and Chrome handle these combinations before the web page sees them. With **"Send system keys"** on in the Multi-Monitor section (the default), the pop-ups use the Keyboard Lock API to capture them and send them to the remote computer.
 
-> Mỗi cú click chỉ cho phép mở một popup. Muốn **Mở tất cả** mở được nhiều cửa sổ cùng lúc, hãy bấm biểu tượng chặn popup trên thanh địa chỉ và chọn **Luôn cho phép**.
+- Keyboard Lock only works while the page is in its own fullscreen (not F11), so the first click or key press in a pop-up puts it into that mode. A notice in the middle of the pop-up says whether the keys are captured.
+- To get out: **hold Esc** for about 2 seconds. A short Esc press is still sent to the remote computer.
+- While captured, Alt+Tab and Win act on the remote computer. To switch to another window on your computer, use the mouse or leave fullscreen first.
+- **Ctrl+Alt+Del** can never be captured, because Windows reserves it. Use **Press Ctrl+Alt+Del** in CRD's side panel.
 
-## Giới hạn và xử lý sự cố
+> One click may open only one pop-up. For **Open all** to open several windows at once, click the blocked pop-up icon in the address bar and choose **Always allow**.
 
-- **Con trỏ lệch vài pixel**: tọa độ được quy đổi theo kích thước canvas trong tab CRD. Tab CRD càng lớn (maximize) thì quy đổi càng chính xác.
-- **Chuột/phím trong popup không có tác dụng**: tải lại tab CRD (F5). Nếu vẫn không được, có thể Google đã đổi cách CRD xử lý input; khi đó cần sửa lại `content.js`.
-- **Tab CRD phải còn mở** (có thể để ở màn hình phụ hoặc phía sau popup). Đừng thu nhỏ (minimize) tab đó.
-- Chưa hỗ trợ: chế độ chuột tương đối (Relative mouse mode), đồng bộ clipboard qua popup.
+## Limitations and troubleshooting
 
-## Tệp
+- **Pointer off by a few pixels**: coordinates are converted using the canvas size in the CRD tab. The bigger the CRD tab (maximized), the more precise the conversion.
+- **Mouse/keyboard in a pop-up does nothing**: reload the CRD tab (F5). If it still doesn't work, Google may have changed how CRD handles input, and `content.js` needs updating.
+- **The CRD tab must stay open** (it can sit on another screen or behind the pop-ups). Don't minimize it.
+- Browser zoom on the CRD tab other than 100% breaks cross-display drags.
+- Not supported yet: relative mouse mode, clipboard sync through the pop-ups.
 
-| Tệp | Vai trò |
+## Files
+
+| File | Purpose |
 |---|---|
-| `manifest.json` | Khai báo extension (Manifest V3) |
-| `background.js` | Liệt kê màn hình cục bộ, đặt vị trí và toàn màn hình cho popup |
-| `content.js` | Bảng điều khiển, tìm các màn hình từ xa, cửa sổ xem, đổi tọa độ input |
-| `icons/` | Icon của extension (16, 32, 48, 128 px) |
-| `tools/make_icons.py` | Script vẽ lại icon (cần Python + Pillow) |
+| `manifest.json` | Extension manifest (Manifest V3) |
+| `background.js` | Lists local screens, places pop-ups, window-level fullscreen |
+| `content.js` | Side-panel section, finds the remote displays, viewer windows, input mapping |
+| `icons/` | Extension icons (16, 32, 48, 128 px) |
+| `tools/make_icons.py` | Redraws the icons (needs Python + Pillow) |
