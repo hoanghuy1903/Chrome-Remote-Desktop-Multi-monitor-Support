@@ -742,7 +742,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
 </div>
 <div class="Hyjxyd"><div id="crdmm-host"></div></div>`;
     const header = section.querySelector('.p1H7kc');
-    const toggle = () => { settings.collapsed = !settings.collapsed; save(); applyCollapsed(); };
+    const toggle = () => { settings.collapsed = !settings.collapsed; save(); applyCollapsed(true); };
     header.addEventListener('click', toggle);
     header.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
 
@@ -834,18 +834,32 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     panelHost.style.setProperty('--crdmm-acc-fg', lightText ? '#202124' : '#fff');
   }
 
-  // Same as CRD: a class on the section (turns the chevron) plus display:none on the body.
-  function applyCollapsed() {
+  // Same as CRD's own sections: a class on the section (turns the chevron) and a
+  // 200 ms height transition on the body, ending in display:none when collapsed.
+  let collapseTimer = 0;
+  function applyCollapsed(animate = false) {
     if (!section) return;
-    section.classList.toggle('q3lLfc', settings.collapsed);
-    section.querySelector('.Hyjxyd').style.display = settings.collapsed ? 'none' : '';
+    const body = section.querySelector('.Hyjxyd');
+    const collapse = settings.collapsed;
+    section.classList.toggle('q3lLfc', collapse);
+    clearTimeout(collapseTimer);
+    if (!animate || !section.getBoundingClientRect().width) {
+      body.style.cssText = collapse ? 'display:none' : '';
+      return;
+    }
+    const from = collapse ? body.scrollHeight : 0;
+    body.style.cssText = `box-sizing:border-box;overflow:hidden;height:${from}px;transition:height 200ms`;
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      body.style.height = collapse ? '0px' : body.scrollHeight + 'px';
+    }));
+    collapseTimer = setTimeout(() => { body.style.cssText = collapse ? 'height:0px;display:none' : ''; }, 200);
   }
 
   // Open CRD's side panel and bring the section into view (extension icon / Alt+Shift+M).
   function revealSection() {
     ensureSection();
     if (!section || !section.isConnected) { notify('Chưa thấy bảng bên của CRD. Hãy kết nối tới máy từ xa trước.'); return; }
-    if (settings.collapsed) { settings.collapsed = false; save(); applyCollapsed(); }
+    if (settings.collapsed) { settings.collapsed = false; save(); applyCollapsed(true); }
     if (!section.getBoundingClientRect().width) {
       const arrow = document.querySelector('span.DPvwYc.A469B');
       const opener = arrow && (arrow.closest('[jsaction]') || arrow.parentElement);
@@ -991,8 +1005,11 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes[KEY]) return;
+    const wasCollapsed = settings.collapsed;
     settings = { ...DEFAULTS, ...changes[KEY].newValue };
-    syncFields(); applyCollapsed(); refreshAll();
+    syncFields(); refreshAll();
+    // Our own saves come back here too; don't cut a running collapse animation short.
+    if (settings.collapsed !== wasCollapsed) applyCollapsed();
   });
 
   async function loadDisplays() {
