@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "CRD Multi-Monitor",
+  "version": "1.1.0",
+  "description": "Tách các màn hình của máy từ xa trong Chrome Remote Desktop ra nhiều cửa sổ, mỗi cửa sổ một màn hình cục bộ.",
+  "permissions": ["storage", "system.display", "debugger"],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_title": "CRD Multi-Monitor: hiện/ẩn bảng điều khiển"
+  },
+  "commands": {
+    "toggle-panel": {
+      "suggested_key": { "default": "Alt+Shift+M" },
+      "description": "Hiện/ẩn bảng điều khiển Multi-Monitor"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://remotedesktop.google.com/*"],
+      "js": ["content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
