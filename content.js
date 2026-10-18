@@ -383,6 +383,75 @@
     }));
   }
 
+  // ---------------------------------------------------------------- drags across displays
+  //
+  // While a mouse button is held, the OS keeps sending the mouse to the window where
+  // the press started. Dragging a remote window from the CRD tab onto a display shown
+  // in a popup (or back) would therefore pin the remote cursor to the first display's
+  // edge. Instead, the pointer's screen position is located on whichever surface shows
+  // a display there, and the event is re-targeted to that display's canvas.
+
+  // Screen position of a window's content area: exact from a real event (screenX -
+  // clientX), estimated from the window frame until one arrives.
+  const originFrom = (e) => ({ x: e.screenX - e.clientX, y: e.screenY - e.clientY });
+  function estimateOrigin(w) {
+    const border = (w.outerWidth - w.innerWidth) / 2;
+    return { x: w.screenX + border, y: w.screenY + (w.outerHeight - w.innerHeight) - border };
+  }
+  let mainOrigin = null;
+  for (const t of ['mousemove', 'mousedown', 'mouseup']) {
+    window.addEventListener(t, (e) => { if (e.isTrusted) mainOrigin = originFrom(e); }, true);
+  }
+
+  // Every place a remote display is visible right now, in screen coordinates.
+  function surfaces() {
+    const { list } = getUnits();
+    const out = [];
+    const mo = mainOrigin || estimateOrigin(window);
+    list.forEach((u, i) => {
+      if (layoutActive && i !== settings.mainDisplay) return;
+      const r = contentRect(u.el);
+      // In single-video mode all units share one element; show each unit's crop.
+      const fx = r.width / u.W, fy = r.height / u.H;
+      out.push({ index: i, inTab: true,
+        left: mo.x + r.left + u.rect.x * fx, top: mo.y + r.top + u.rect.y * fy, width: u.rect.w * fx, height: u.rect.h * fy });
+    });
+    for (const v of viewers.values()) {
+      const u = list[v.index];
+      if (v.win.closed || !v.geom || !u) continue;
+      const o = v.origin || estimateOrigin(v.win);
+      out.push({ index: v.index, inTab: false,
+        left: o.x + v.geom.offX, top: o.y + v.geom.offY, width: u.rect.w * v.geom.s, height: u.rect.h * v.geom.s });
+    }
+    return out;
+  }
+
+  // Screen point -> { el, p } to dispatch on in the CRD tab, or null if no display is there.
+  function locateOnScreen(sx, sy) {
+    for (const s of surfaces()) {
+      if (sx < s.left || sy < s.top || sx >= s.left + s.width || sy >= s.top + s.height) continue;
+      const u = getUnits().list[s.index];
+      const rx = u.rect.x + ((sx - s.left) / s.width) * u.rect.w;
+      const ry = u.rect.y + ((sy - s.top) / s.height) * u.rect.h;
+      const cr = contentRect(u.el);
+      return { el: u.el, index: s.index, inTab: s.inTab, p: { x: cr.left + (rx / u.W) * cr.width, y: cr.top + (ry / u.H) * cr.height } };
+    }
+    return null;
+  }
+
+  // A real drag in the CRD tab that has left the tab's display for a popup's display.
+  function redirectTabDrag(e) {
+    if (!e.isTrusted || !viewers.size) return;
+    if (e.type === 'mousemove' && !e.buttons) return;
+    const t = locateOnScreen(e.screenX, e.screenY);
+    if (!t || t.inTab) return; // still over the CRD tab: CRD handles it
+    e.stopImmediatePropagation();
+    e.preventDefault();
+    fireMouse(t.el, e.type, t.p, e, e.button);
+  }
+  window.addEventListener('mousemove', redirectTabDrag, true);
+  window.addEventListener('mouseup', redirectTabDrag, true);
+
   // ---------------------------------------------------------------- viewer windows
 
   const VIEWER_HTML = (n) => `<!doctype html><html><head><meta charset="utf-8">
@@ -468,10 +537,21 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     };
 
     const onPointer = (e) => {
-      const p = toMain(e.clientX, e.clientY), el = target();
+      if (e.isTrusted) viewer.origin = originFrom(e);
+      let p = toMain(e.clientX, e.clientY), el = target();
       if (!p || !el) return;
       e.preventDefault();
+      // Dragging out of this popup (it keeps the pointer captured): follow the pointer
+      // onto the display under it, if any.
+      const g = viewer.geom, u = getUnits().list[index];
+      const outside = e.clientX < g.offX || e.clientY < g.offY
+        || e.clientX >= g.offX + u.rect.w * g.s || e.clientY >= g.offY + u.rect.h * g.s;
+      if (outside && (e.buttons || e.type === 'pointerup')) {
+        const t = locateOnScreen(e.screenX, e.screenY);
+        if (t && t.index !== index) { el = t.el; p = t.p; }
+      }
       viewer.lastPoint = p;
+      viewer.lastEl = el;
       if (e.type === 'pointerdown') {
         lockKeys();
         try { stage.setPointerCapture(e.pointerId); } catch {}
@@ -523,7 +603,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
         for (const k of viewer.pressed.values()) fireKey(el, 'keyup', k, {});
         if (viewer.buttons && viewer.lastPoint) {
           BUTTON_BITS.forEach((bit, button) => {
-            if (viewer.buttons & bit) fireMouse(el, 'mouseup', viewer.lastPoint, { buttons: 0 }, button);
+            if (viewer.buttons & bit) fireMouse(viewer.lastEl || el, 'mouseup', viewer.lastPoint, { buttons: 0 }, button);
           });
         }
       }
