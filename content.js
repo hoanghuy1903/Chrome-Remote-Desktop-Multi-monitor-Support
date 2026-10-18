@@ -738,6 +738,8 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     <label class="check"><input type="checkbox" id="kl"> Gửi cả phím hệ thống (Win, Alt+Tab, Alt+F4, Ctrl+W…)</label>
     <div class="hint" id="klHint">Bấm chuột hoặc gõ phím vào cửa sổ để bật. Cửa sổ sẽ vào toàn màn hình; giữ Esc để thoát.</div>
     <div class="actions"><button id="openAll" class="primary">Mở tất cả</button><button id="closeAll">Đóng tất cả</button></div>
+    <button id="winFs" title="Alt+Shift+F">Toàn màn hình tab này (Alt+Shift+F)</button>
+    <div class="hint">Dùng nút này thay cho nút Full-screen của CRD: chế độ toàn màn hình của CRD bị Chrome tắt mỗi khi bạn bấm vào popup.</div>
     <div class="hint">Để "Mở tất cả" mở được nhiều cửa sổ cùng lúc, hãy cho phép cửa sổ bật lên (popup) cho trang này.</div>
   </div>
 </div>`;
@@ -751,6 +753,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     $('collapse').onclick = () => { settings.collapsed = !settings.collapsed; save(); applyVisibility(); };
     $('hide').onclick = () => { panelHidden = true; applyVisibility(); };
     $('openAll').onclick = openAll;
+    $('winFs').onclick = () => send({ type: 'toggleWindowFullscreen' });
     $('closeAll').onclick = closeAll;
     ui.layout.onchange = () => { settings.layout = ui.layout.value; save(); refreshAll(); };
     ui.count.onchange = () => { settings.count = clamp(parseInt(ui.count.value, 10) || 1, 1, 8); save(); refreshAll(); };

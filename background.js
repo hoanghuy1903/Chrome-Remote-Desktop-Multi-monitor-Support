@@ -19,6 +19,10 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     pending.push({ bounds: msg.bounds, fullscreen: !!msg.fullscreen, expires: Date.now() + 5000 });
     sendResponse({ ok: true });
   }
+  if (msg.type === 'toggleWindowFullscreen') {
+    if (sender.tab) toggleWindowFullscreen(sender.tab.windowId).then(() => sendResponse({ ok: true }));
+    return true;
+  }
   if (msg.type === 'cancelExpect') {
     pending.pop();
     sendResponse({ ok: true });
@@ -47,6 +51,21 @@ chrome.windows.onCreated.addListener((win) => {
   if (p) placeWindow(win.id, p);
 });
 
+// Window-level fullscreen (like F11), not the page's Fullscreen API. Chrome drops a
+// page's own fullscreen whenever a popup it opened gets focus, which kicks the CRD tab
+// out of fullscreen as soon as the user clicks into a viewer; window fullscreen stays.
+// F11 itself can't be used: in a CRD session it's sent to the remote machine.
+const restoreState = new Map(); // windowId -> state to return to
+async function toggleWindowFullscreen(windowId) {
+  const win = await chrome.windows.get(windowId);
+  if (win.state === 'fullscreen') {
+    await chrome.windows.update(windowId, { state: restoreState.get(windowId) || 'maximized' });
+  } else {
+    restoreState.set(windowId, win.state === 'minimized' ? 'normal' : win.state);
+    await chrome.windows.update(windowId, { state: 'fullscreen' });
+  }
+}
+
 function togglePanel(tabId) {
   if (tabId == null) return;
   chrome.tabs.sendMessage(tabId, { type: 'togglePanel' }, () => void chrome.runtime.lastError);
@@ -55,7 +74,8 @@ function togglePanel(tabId) {
 chrome.action.onClicked.addListener((tab) => togglePanel(tab.id));
 
 chrome.commands.onCommand.addListener(async (cmd) => {
-  if (cmd !== 'toggle-panel') return;
   const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
-  if (tab) togglePanel(tab.id);
+  if (!tab) return;
+  if (cmd === 'toggle-panel') togglePanel(tab.id);
+  if (cmd === 'toggle-window-fullscreen') toggleWindowFullscreen(tab.windowId);
 });

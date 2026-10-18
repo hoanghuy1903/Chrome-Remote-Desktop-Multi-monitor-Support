@@ -24,6 +24,10 @@
     "toggle-panel": {
       "suggested_key": { "default": "Alt+Shift+M" },
       "description": "Hiện/ẩn bảng điều khiển Multi-Monitor"
+    },
+    "toggle-window-fullscreen": {
+      "suggested_key": { "default": "Alt+Shift+F" },
+      "description": "Bật/tắt toàn màn hình cho cửa sổ tab CRD"
     }
   },
   "content_scripts": [

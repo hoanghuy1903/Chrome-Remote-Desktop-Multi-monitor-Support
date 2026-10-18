@@ -27,6 +27,14 @@ Sau mỗi lần sửa file: bấm nút tải lại ↻ ở thẻ extension, **r�
 4. Với mỗi "Màn hình từ xa", chọn màn hình trên máy bạn sẽ hiển thị nó, rồi bấm **Mở** (hoặc **Mở tất cả**).
 5. Thoát toàn màn hình bằng **F11** (hoặc **giữ Esc** nếu đang khóa phím hệ thống, xem dưới). Đóng popup như một cửa sổ bình thường.
 
+### Toàn màn hình cho tab CRD
+
+Dùng nút **"Toàn màn hình tab này"** trong bảng điều khiển hoặc phím **Alt+Shift+F**, đừng dùng nút Full-screen của CRD hay phím F11:
+
+- Nút Full-screen của CRD dùng chế độ toàn màn hình của trang. Chrome tự tắt chế độ này mỗi khi bạn bấm vào một popup do trang đó mở (quy tắc an ninh của Chrome), nên màn 1 sẽ bị thoát.
+- Trong phiên CRD, phím F11 được gửi sang máy từ xa chứ không tới Chrome trên máy bạn.
+- Nút của extension đưa cả cửa sổ vào toàn màn hình (giống F11), nên giữ nguyên khi bạn chuyển sang popup. Đổi lại, ở tab CRD các phím hệ thống (Win, Alt+Tab…) sẽ tác động lên máy bạn, không gửi sang máy từ xa.
+
 ### Giữ một màn hình ở tab CRD
 
 Ô **"Tab này hiển thị"** trong bảng (mặc định: *Chỉ màn hình từ xa 1*) cho tab CRD chỉ hiện một màn hình, phóng to vừa tab. Các màn hình còn lại chỉ xem qua popup; **Mở tất cả** sẽ bỏ qua màn hình đang ở tab.
