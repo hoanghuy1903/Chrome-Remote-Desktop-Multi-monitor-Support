@@ -40,7 +40,7 @@ async function placeWindow(windowId, { bounds, fullscreen }) {
       await chrome.windows.update(windowId, { state: 'fullscreen', focused: true });
     }
   } catch (e) {
-    console.warn('CRD Multi-Monitor: không đặt được vị trí cửa sổ', e);
+    console.warn('CRD Multi-Monitor: could not place the window', e);
   }
 }
 

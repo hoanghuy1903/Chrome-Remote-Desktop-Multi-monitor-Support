@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "CRD Multi-Monitor",
   "version": "1.2.0",
-  "description": "Tách các màn hình của máy từ xa trong Chrome Remote Desktop ra nhiều cửa sổ, mỗi cửa sổ một màn hình cục bộ.",
+  "description": "Show each remote display of a Chrome Remote Desktop session in its own window, one per local screen.",
   "permissions": ["storage", "system.display"],
   "background": {
     "service_worker": "background.js"
@@ -14,7 +14,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "CRD Multi-Monitor: mở mục Multi-Monitor trong bảng bên của CRD",
+    "default_title": "CRD Multi-Monitor: open the Multi-Monitor section in the CRD side panel",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"
@@ -23,11 +23,11 @@
   "commands": {
     "toggle-panel": {
       "suggested_key": { "default": "Alt+Shift+M" },
-      "description": "Mở mục Multi-Monitor trong bảng bên của CRD"
+      "description": "Open the Multi-Monitor section in the CRD side panel"
     },
     "toggle-window-fullscreen": {
       "suggested_key": { "default": "Alt+Shift+F" },
-      "description": "Bật/tắt toàn màn hình cho cửa sổ tab CRD"
+      "description": "Toggle fullscreen for the CRD tab's window"
     }
   },
   "content_scripts": [

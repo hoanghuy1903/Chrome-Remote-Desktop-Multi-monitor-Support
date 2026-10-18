@@ -456,7 +456,7 @@
   // ---------------------------------------------------------------- viewer windows
 
   const VIEWER_HTML = (n) => `<!doctype html><html><head><meta charset="utf-8">
-<title>CRD · Màn hình ${n}</title>
+<title>CRD · Display ${n}</title>
 <style>
 html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
 #stage{position:fixed;inset:0;touch-action:none}
@@ -472,7 +472,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   background:rgba(26,115,232,.92);padding:6px 10px;border-radius:6px;transition:opacity .6s;pointer-events:none}
 </style></head><body>
 <div id="stage"><div id="clip"><video id="v" autoplay muted playsinline disablepictureinpicture></video></div></div>
-<div id="msg"></div><div id="tag">Màn hình từ xa ${n}</div><div id="note"></div>
+<div id="msg"></div><div id="tag">Remote display ${n}</div><div id="note"></div>
 </body></html>`;
 
   function createViewer(index, win) {
@@ -501,11 +501,11 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       if (!u) {
         viewer.geom = null;
         showMsg(list.length
-          ? `CRD hiện chỉ có ${list.length} màn hình. Đóng cửa sổ này hoặc đổi bố cục trong mục Multi-Monitor (bảng bên của CRD).`
-          : 'Đang chờ hình từ Chrome Remote Desktop…');
+          ? `CRD currently has only ${list.length} display(s). Close this window or change the layout in the Multi-Monitor section of the CRD side panel.`
+          : 'Waiting for the picture from Chrome Remote Desktop…');
         return;
       }
-      if (!u.stream) { viewer.geom = null; showMsg('Không lấy được luồng video từ trang CRD.'); return; }
+      if (!u.stream) { viewer.geom = null; showMsg('Couldn\'t get the video stream from the CRD page.'); return; }
       if (v.srcObject !== u.stream) { v.srcObject = u.stream; v.play().catch(() => {}); }
       hideMsg();
 
@@ -543,7 +543,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     // itself is fullscreen (requestFullscreen, not F11), which needs a click or key press.
     const lockKeys = () => {
       if (!settings.keyboardLock) {
-        showNote('Phím hệ thống chưa được khóa: ô "Gửi cả phím hệ thống" trong mục Multi-Monitor đang tắt.');
+        showNote('System keys aren\'t captured: "Send system keys" is off in the Multi-Monitor section.');
         return;
       }
       const kb = win.navigator.keyboard;
@@ -553,11 +553,11 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       if (!doc.fullscreenElement && ua && !ua.isActive) return; // needs a click or key press
       (doc.fullscreenElement ? Promise.resolve() : doc.documentElement.requestFullscreen({ navigationUI: 'hide' }))
         .then(() => {
-          if (!kb || !kb.lock) throw new Error('trình duyệt không hỗ trợ Keyboard Lock');
+          if (!kb || !kb.lock) throw new Error('this browser doesn\'t support Keyboard Lock');
           return kb.lock();
         })
-        .then(() => showNote('Đã khóa phím hệ thống · giữ Esc để thoát'))
-        .catch((err) => showNote('Không khóa được phím hệ thống: ' + (err && err.message || err)));
+        .then(() => showNote('System keys captured · hold Esc to exit'))
+        .catch((err) => showNote('Couldn\'t capture system keys: ' + (err && err.message || err)));
     };
 
     const onPointer = (e) => {
@@ -648,7 +648,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   async function openViewer(index) {
     const existing = viewers.get(index);
     if (existing && !existing.win.closed) { existing.win.focus(); return true; }
-    if (!getUnits().list.length) { toast('Chưa thấy hình. Hãy kết nối tới máy từ xa trước.'); return false; }
+    if (!getUnits().list.length) { toast('No remote picture yet. Connect to the remote computer first.'); return false; }
 
     const disp = displayFor(index);
     if (disp) await send({ type: 'expectViewer', bounds: disp.bounds, fullscreen: settings.fullscreen });
@@ -658,7 +658,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       `popup=yes,left=${b.left},top=${b.top},width=${b.width},height=${b.height}`);
     if (!win) {
       if (disp) send({ type: 'cancelExpect' });
-      toast('Chrome đã chặn cửa sổ bật lên. Bấm biểu tượng chặn popup trên thanh địa chỉ → "Luôn cho phép".');
+      toast('Chrome blocked the pop-up. Click the blocked pop-up icon in the address bar → "Always allow".');
       return false;
     }
     viewers.set(index, createViewer(index, win));
@@ -675,7 +675,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
 
   async function openAll() {
     const n = getUnits().list.length;
-    if (!n) { toast('Chưa thấy hình. Hãy kết nối tới máy từ xa trước.'); return; }
+    if (!n) { toast('No remote picture yet. Connect to the remote computer first.'); return; }
     // With "fullscreen on open", the CRD tab goes fullscreen too (window level, so
     // focusing the popups doesn't end it).
     if (settings.fullscreen) send({ type: 'windowFullscreen', on: true }).then((r) => r && setWindowFullscreen(r.on));
@@ -751,31 +751,31 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     root.innerHTML = `<style>${PANEL_CSS}</style>
 <div class="panel"><div class="body">
     <div class="status" id="status"></div>
-    <label class="row" id="mainRow">Tab này hiển thị
+    <label class="row" id="mainRow">This tab shows
       <select id="main"></select></label>
     <div id="toast" class="toast" hidden></div>
     <div id="layoutBox">
-      <label class="row">Bố cục
+      <label class="row">Layout
         <select id="layout">
-          <option value="auto">Tự động (theo tỉ lệ)</option>
-          <option value="columns">Chia theo cột</option>
-          <option value="rows">Chia theo hàng</option>
-          <option value="custom">Tùy chỉnh (JSON)</option>
+          <option value="auto">Automatic (by aspect ratio)</option>
+          <option value="columns">Split into columns</option>
+          <option value="rows">Split into rows</option>
+          <option value="custom">Custom (JSON)</option>
         </select></label>
-      <label class="row" id="countRow">Số màn hình từ xa <input id="count" type="number" min="1" max="8"></label>
+      <label class="row" id="countRow">Remote displays <input id="count" type="number" min="1" max="8"></label>
       <div id="customRow">
         <textarea id="custom" rows="3" placeholder="[[0,0,1920,1080],[1920,0,2560,1440]]"></textarea>
-        <div class="hint">Mỗi phần tử là [x, y, rộng, cao] theo pixel của video nguồn.</div>
+        <div class="hint">Each entry is [x, y, width, height] in source video pixels.</div>
       </div>
     </div>
     <div id="list"></div>
-    <label class="check"><input type="checkbox" id="fs"> Tự bật toàn màn hình khi mở (cả tab này khi bấm "Mở tất cả")</label>
-    <label class="check"><input type="checkbox" id="kl"> Gửi cả phím hệ thống (Win, Alt+Tab, Alt+F4, Ctrl+W…)</label>
-    <div class="hint" id="klHint">Bấm chuột hoặc gõ phím vào cửa sổ để bật. Cửa sổ sẽ vào toàn màn hình; giữ Esc để thoát.</div>
-    <div class="actions"><button id="openAll" class="primary">Mở tất cả</button><button id="closeAll">Đóng tất cả</button></div>
-    <button id="winFs" title="Alt+Shift+F">Toàn màn hình tab này (Alt+Shift+F)</button>
-    <div class="hint">Dùng nút này thay cho nút Full-screen của CRD: chế độ toàn màn hình của CRD bị Chrome tắt mỗi khi bạn bấm vào popup.</div>
-    <div class="hint">Để "Mở tất cả" mở được nhiều cửa sổ cùng lúc, hãy cho phép cửa sổ bật lên (popup) cho trang này.</div>
+    <label class="check"><input type="checkbox" id="fs"> Go fullscreen when opening (this tab too on "Open all")</label>
+    <label class="check"><input type="checkbox" id="kl"> Send system keys (Win, Alt+Tab, Alt+F4, Ctrl+W…)</label>
+    <div class="hint" id="klHint">Click or press a key in a window to turn it on. The window goes fullscreen; hold Esc to exit.</div>
+    <div class="actions"><button id="openAll" class="primary">Open all</button><button id="closeAll">Close all</button></div>
+    <button id="winFs" title="Alt+Shift+F">Fullscreen this tab (Alt+Shift+F)</button>
+    <div class="hint">Use this instead of CRD's Full-screen button: Chrome ends CRD's own fullscreen whenever you click into a pop-up.</div>
+    <div class="hint">For "Open all" to open several windows at once, allow pop-ups for this site.</div>
 </div></div>`;
     const $ = (id) => root.getElementById(id);
     ui = {
@@ -858,7 +858,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
   // Open CRD's side panel and bring the section into view (extension icon / Alt+Shift+M).
   function revealSection() {
     ensureSection();
-    if (!section || !section.isConnected) { notify('Chưa thấy bảng bên của CRD. Hãy kết nối tới máy từ xa trước.'); return; }
+    if (!section || !section.isConnected) { notify('CRD\'s side panel isn\'t there yet. Connect to the remote computer first.'); return; }
     if (settings.collapsed) { settings.collapsed = false; save(); applyCollapsed(true); }
     if (!section.getBoundingClientRect().width) {
       const arrow = document.querySelector('span.DPvwYc.A469B');
@@ -915,8 +915,8 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     const mainSig = list.length + ':' + settings.mainDisplay;
     if (mode === 'multi' && mainSig !== ui.mainSig && ui.root.activeElement !== ui.main) {
       ui.mainSig = mainSig;
-      ui.main.innerHTML = '<option value="-1">Tất cả màn hình (như CRD gốc)</option>'
-        + list.map((_, i) => `<option value="${i}">Chỉ màn hình từ xa ${i + 1}</option>`).join('');
+      ui.main.innerHTML = '<option value="-1">All displays (like stock CRD)</option>'
+        + list.map((_, i) => `<option value="${i}">Only remote display ${i + 1}</option>`).join('');
       ui.main.value = String(settings.mainDisplay < list.length ? settings.mainDisplay : -1);
     }
     ui.countRow.hidden = !(settings.layout === 'columns' || settings.layout === 'rows');
@@ -924,16 +924,16 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
 
     if (!mode) {
       ui.status.className = 'status warn';
-      ui.status.textContent = 'Chưa thấy hình. Hãy kết nối tới máy từ xa.';
+      ui.status.textContent = 'No remote picture yet. Connect to the remote computer.';
     } else if (mode === 'multi') {
       ui.status.className = 'status';
-      ui.status.textContent = `CRD đang hiển thị ${list.length} màn hình từ xa.`;
+      ui.status.textContent = `CRD is showing ${list.length} remote displays.`;
     } else if (list.length === 1 && settings.layout === 'auto') {
       ui.status.className = 'status warn';
-      ui.status.textContent = `Chỉ thấy 1 màn hình (${W}×${H}). Trong bảng bên của CRD, mục Displays, chọn "Show all displays".`;
+      ui.status.textContent = `Only 1 display found (${W}×${H}). In the CRD side panel, under Displays, choose "Show all displays".`;
     } else {
       ui.status.className = 'status';
-      ui.status.textContent = `Một khung hình ${W}×${H}, chia thành ${list.length} màn hình.`;
+      ui.status.textContent = `One ${W}×${H} picture, split into ${list.length} displays.`;
     }
 
     const sig = JSON.stringify([list.map((u) => [u.W, u.H, u.rect]), displays.map((d) => d.id), [...viewers.keys()], settings.assignments, layoutActive && settings.mainDisplay]);
@@ -944,18 +944,18 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     const sorted = sortedDisplays();
     ui.list.innerHTML = list.map((u, i) => {
       const cur = displayFor(i);
-      const opts = [`<option value="none"${settings.assignments[i] === 'none' ? ' selected' : ''}>Không đặt vị trí</option>`]
+      const opts = [`<option value="none"${settings.assignments[i] === 'none' ? ' selected' : ''}>Don't place</option>`]
         .concat(sorted.map((d, k) => {
-          const label = `${k + 1}. ${d.name || 'Display'} ${d.bounds.width}×${d.bounds.height}${d.isPrimary ? ' (chính)' : ''}`;
+          const label = `${k + 1}. ${d.name || 'Display'} ${d.bounds.width}×${d.bounds.height}${d.isPrimary ? ' (primary)' : ''}`;
           return `<option value="${esc(d.id)}"${cur && cur.id === d.id ? ' selected' : ''}>${esc(label)}</option>`;
         })).join('');
       const open = viewers.has(i);
       const inTab = layoutActive && i === settings.mainDisplay;
-      const dim = (inTab ? 'ở tab này · ' : '')
+      const dim = (inTab ? 'in this tab · ' : '')
         + (mode === 'multi' ? `${u.W}×${u.H}` : `${u.rect.w}×${u.rect.h} @ ${u.rect.x},${u.rect.y}`);
-      return `<div class="mon"><div class="top"><b>Màn hình từ xa ${i + 1}</b><span class="dim">${dim}</span></div>
-        <div class="row"><select data-i="${i}" title="Hiển thị trên màn hình nào của máy này">${opts}</select>
-        <button data-i="${i}"${open ? '' : ' class="primary"'}>${open ? 'Đóng' : 'Mở'}</button></div></div>`;
+      return `<div class="mon"><div class="top"><b>Remote display ${i + 1}</b><span class="dim">${dim}</span></div>
+        <div class="row"><select data-i="${i}" title="Which local screen to show it on">${opts}</select>
+        <button data-i="${i}"${open ? '' : ' class="primary"'}>${open ? 'Close' : 'Open'}</button></div></div>`;
     }).join('');
   }
 
@@ -1028,7 +1028,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     applyMainLayout();
     renderPanel(true);
     window.addEventListener('resize', applyMainLayout);
-    console.info('[CRD-MM] sẵn sàng · màn hình cục bộ:', displays.length);
+    console.info('[CRD-MM] ready · local screens:', displays.length);
 
     let tick = 0;
     setInterval(() => {
