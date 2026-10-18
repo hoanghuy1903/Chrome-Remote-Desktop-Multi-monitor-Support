@@ -3,8 +3,8 @@
 // With "Show all displays", CRD receives one WebRTC video per remote monitor and
 // paints each into its own <canvas>, side by side. We open one popup per remote
 // monitor and play that monitor's MediaStream in it directly (no re-encoding).
-// Input in a popup is mapped onto the matching canvas and delivered through
-// chrome.debugger (background.js), because CRD ignores untrusted DOM events.
+// Input in a popup is mapped onto the matching canvas in the CRD tab and
+// re-dispatched there as ordinary DOM events, which CRD forwards to the host.
 //
 // Older/other layouts that show a single stitched video are still handled by
 // cropping that video into several regions (the "layout" settings).
@@ -240,9 +240,8 @@
   //
   // CRD puts each display's canvas in its own cell of a CSS grid. To keep only one
   // display in the CRD tab, all cells are stacked in one cell sized to that display:
-  // the chosen one visible on top, the others transparent underneath. Input for a
-  // hidden display (from its viewer) briefly raises its transparent layer so the
-  // debugger-injected events hit its canvas; CRD then maps them to that display.
+  // the chosen one visible on top, the others transparent underneath. The hidden
+  // canvases keep their real size and position, so input aimed at them still works.
 
   let layoutStyle = null;
   let layoutActive = false;
@@ -276,56 +275,43 @@
 [data-crdmm-grid]{width:${w}!important;height:${h}!important;grid-template-columns:100%!important;grid-template-rows:100%!important}
 [data-crdmm-unit]{grid-area:1/1/2/2!important;width:${w}!important;height:${h}!important;position:relative!important;z-index:1!important;opacity:0!important}
 [data-crdmm-unit] canvas{width:${w}!important;height:${h}!important}
-[data-crdmm-unit="${idx}"]{z-index:2!important;opacity:1!important}
-html[data-crdmm-route] [data-crdmm-unit]{z-index:1!important}
-${list.map((_, i) => `html[data-crdmm-route="${i}"] [data-crdmm-unit="${i}"]{z-index:3!important}`).join('\n')}`;
+[data-crdmm-unit="${idx}"]{z-index:2!important;opacity:1!important}`;
   }
 
-  let unrouteTimer = 0;
-  function routeTo(index) {
-    if (!layoutActive || index == null || index === settings.mainDisplay) return;
-    clearTimeout(unrouteTimer);
-    document.documentElement.dataset.crdmmRoute = String(index);
-  }
-  // Drop the route soon after the last viewer input, so real mouse use in the CRD tab
-  // reaches the visible display again.
-  function unrouteSoon() {
-    clearTimeout(unrouteTimer);
-    unrouteTimer = setTimeout(() => { delete document.documentElement.dataset.crdmmRoute; }, 150);
-  }
+  // ---------------------------------------------------------------- input
+  //
+  // CRD listens for mouse events on the document and for wheel/keyboard events on its
+  // desktop container. It finds the remote display from the event target (a canvas
+  // with data-stream-id) and the position from that canvas's on-screen rect, and does
+  // not check isTrusted. So plain DOM events dispatched on a display's canvas reach
+  // the host like real input, also for canvases hidden by the main-tab layout.
 
-  // ---------------------------------------------------------------- input (via chrome.debugger)
+  const BUTTON_BITS = [1, 4, 2, 8, 16]; // MouseEvent.button -> MouseEvent.buttons bit
+  const mods = (e) => ({ ctrlKey: !!e.ctrlKey, shiftKey: !!e.shiftKey, altKey: !!e.altKey, metaKey: !!e.metaKey });
 
-  const MODS = (e) => (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
-  const BUTTONS = ['left', 'middle', 'right', 'back', 'forward'];
-  const BUTTON_BITS = [1, 4, 2, 8, 16];
-  let lastErrorAt = 0;
-
-  // routeIndex: the remote display mouse commands are meant for (see main-tab layout).
-  function cdp(commands, routeIndex) {
-    routeTo(routeIndex);
-    return send({ type: 'cdp', commands }).then((r) => {
-      if (routeIndex != null) unrouteSoon();
-      const err = !r ? 'extension không phản hồi (hãy tải lại tab CRD)' : r.error;
-      if (!err || performance.now() - lastErrorAt < 5000) return;
-      lastErrorAt = performance.now();
-      const text = 'Không gửi được chuột/bàn phím tới CRD: ' + err
-        + '. Đóng DevTools của tab CRD (nếu đang mở) và đừng bấm Hủy trên thanh "đang gỡ lỗi".';
-      toast(text);
-      // The user is looking at the viewers, not the CRD tab.
-      for (const v of viewers.values()) v.flash && v.flash(text);
-    });
+  function fireMouse(el, type, p, e, button = 0) {
+    el.dispatchEvent(new MouseEvent(type, {
+      bubbles: true, cancelable: true, composed: true, view: window,
+      clientX: p.x, clientY: p.y, screenX: window.screenX + p.x, screenY: window.screenY + p.y,
+      button, buttons: e.buttons, ...mods(e),
+    }));
   }
 
-  const mouse = (params) => ({ method: 'Input.dispatchMouseEvent', params });
-  const key = (type, k, modifiers) => ({
-    method: 'Input.dispatchKeyEvent',
-    params: {
-      type, key: k.key, code: k.code, modifiers,
-      windowsVirtualKeyCode: k.keyCode, nativeVirtualKeyCode: k.keyCode,
-      location: k.location, isKeypad: k.location === 3, autoRepeat: !!k.repeat,
-    },
-  });
+  function fireWheel(el, p, e) {
+    el.dispatchEvent(new WheelEvent('wheel', {
+      bubbles: true, cancelable: true, composed: true, view: window,
+      clientX: p.x, clientY: p.y, deltaX: e.deltaX, deltaY: e.deltaY, deltaZ: e.deltaZ, deltaMode: e.deltaMode,
+      ...mods(e),
+    }));
+  }
+
+  // CRD maps keys by KeyboardEvent.code (to USB codes), which survives re-dispatch.
+  function fireKey(el, type, k, e) {
+    el.dispatchEvent(new KeyboardEvent(type, {
+      bubbles: true, cancelable: true, composed: true, view: window,
+      key: k.key, code: k.code, location: k.location, repeat: !!k.repeat, ...mods(e),
+    }));
+  }
 
   // ---------------------------------------------------------------- viewer windows
 
@@ -341,12 +327,9 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   border-radius:8px;display:none}
 #tag{position:fixed;top:12px;left:12px;color:#fff;font:600 13px system-ui,sans-serif;
   background:rgba(26,115,232,.92);padding:6px 10px;border-radius:6px;transition:opacity .6s;pointer-events:none}
-#err{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);max-width:80%;color:#fff;
-  font:13px/1.45 system-ui,sans-serif;background:rgba(197,34,31,.94);padding:8px 12px;border-radius:6px;
-  pointer-events:none;display:none}
 </style></head><body>
 <div id="stage"><div id="clip"><video id="v" autoplay muted playsinline disablepictureinpicture></video></div></div>
-<div id="msg"></div><div id="tag">Màn hình từ xa ${n}</div><div id="err"></div>
+<div id="msg"></div><div id="tag">Màn hình từ xa ${n}</div>
 </body></html>`;
 
   function createViewer(index, win) {
@@ -354,15 +337,8 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     doc.open(); doc.write(VIEWER_HTML(index + 1)); doc.close();
     const $ = (id) => doc.getElementById(id);
     const v = $('v'), clip = $('clip'), stage = $('stage'), msg = $('msg');
-    const viewer = { index, win, geom: null, sig: '', pressed: new Map(), buttons: 0, lastDown: null };
+    const viewer = { index, win, geom: null, sig: '', pressed: new Map(), buttons: 0, lastPoint: null };
     setTimeout(() => { $('tag').style.opacity = '0'; }, 2500);
-    let flashTimer = 0;
-    viewer.flash = (text) => {
-      const el = $('err');
-      el.textContent = text; el.style.display = 'block';
-      clearTimeout(flashTimer);
-      flashTimer = setTimeout(() => { el.style.display = 'none'; }, 6000);
-    };
 
     const showMsg = (t) => { msg.textContent = t; msg.style.display = 'block'; clip.style.display = 'none'; viewer.sig = ''; };
     const hideMsg = () => { msg.style.display = 'none'; clip.style.display = ''; };
@@ -404,41 +380,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       return { x: cr.left + (sx / W) * cr.width, y: cr.top + (sy / H) * cr.height };
     };
 
-    // At most one mouse move is in flight; newer moves replace the queued one. (Not
-    // requestAnimationFrame: it stalls while the viewer window is covered or hidden.)
-    let pendingMove = null, moveInFlight = false;
-    const pumpMoves = () => {
-      if (!pendingMove || moveInFlight) return;
-      const m = pendingMove; pendingMove = null; moveInFlight = true;
-      cdp([mouse(m)], index).finally(() => { moveInFlight = false; pumpMoves(); });
-    };
-    // Presses, releases and wheel must not overtake the last move.
-    const flushMove = () => {
-      if (!pendingMove) return;
-      const m = pendingMove; pendingMove = null;
-      cdp([mouse(m)], index);
-    };
-    const heldButton = (buttons) => {
-      for (let i = 0; i < BUTTONS.length; i++) if (buttons & BUTTON_BITS[i]) return BUTTONS[i];
-      return 'none';
-    };
-
-    const press = (type, e, p) => {
-      flushMove();
-      const button = BUTTONS[e.button] || 'left';
-      let clickCount = 1;
-      if (type === 'mousePressed') {
-        const last = viewer.lastDown, now = performance.now();
-        if (last && last.button === button && now - last.t < 500 && Math.hypot(p.x - last.x, p.y - last.y) < 5) {
-          clickCount = last.count + 1;
-        }
-        viewer.lastDown = { button, t: now, x: p.x, y: p.y, count: clickCount };
-      } else if (viewer.lastDown) {
-        clickCount = viewer.lastDown.count;
-      }
-      viewer.buttons = e.buttons;
-      cdp([mouse({ type, x: p.x, y: p.y, button, buttons: e.buttons, clickCount, modifiers: MODS(e) })], index);
-    };
+    const target = () => { const u = getUnits().list[index]; return u ? u.el : null; };
 
     // Keys like Win, Alt+Tab, Alt+F4 or Ctrl+W normally go to Windows or Chrome before
     // the page sees them. The Keyboard Lock API captures them, but only while the page
@@ -452,65 +394,67 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     };
 
     const onPointer = (e) => {
-      const p = toMain(e.clientX, e.clientY);
-      if (!p) return;
+      const p = toMain(e.clientX, e.clientY), el = target();
+      if (!p || !el) return;
       e.preventDefault();
+      viewer.lastPoint = p;
       if (e.type === 'pointerdown') {
         lockKeys();
         try { stage.setPointerCapture(e.pointerId); } catch {}
         win.focus();
-        press('mousePressed', e, p);
+        fireMouse(el, 'mousedown', p, e, e.button);
       } else if (e.type === 'pointerup') {
-        press('mouseReleased', e, p);
+        fireMouse(el, 'mouseup', p, e, e.button);
       } else if (e.button >= 0) {
         // A second button pressed/released while another is held arrives as pointermove.
-        const bit = BUTTON_BITS[e.button] || 0;
-        press(e.buttons & bit ? 'mousePressed' : 'mouseReleased', e, p);
+        fireMouse(el, e.buttons & (BUTTON_BITS[e.button] || 0) ? 'mousedown' : 'mouseup', p, e, e.button);
       } else {
-        pendingMove = { type: 'mouseMoved', x: p.x, y: p.y, button: heldButton(e.buttons), buttons: e.buttons, modifiers: MODS(e) };
-        pumpMoves();
+        fireMouse(el, 'mousemove', p, e);
       }
+      viewer.buttons = e.buttons;
     };
     stage.addEventListener('pointerdown', onPointer);
     stage.addEventListener('pointermove', onPointer);
     stage.addEventListener('pointerup', onPointer);
     stage.addEventListener('contextmenu', (e) => e.preventDefault());
     stage.addEventListener('wheel', (e) => {
-      const p = toMain(e.clientX, e.clientY);
-      if (!p) return;
+      const p = toMain(e.clientX, e.clientY), el = target();
+      if (!p || !el) return;
       e.preventDefault();
-      const k = e.deltaMode === 1 ? 40 : e.deltaMode === 2 ? 800 : 1;
-      flushMove();
-      cdp([mouse({ type: 'mouseWheel', x: p.x, y: p.y, deltaX: e.deltaX * k, deltaY: e.deltaY * k, modifiers: MODS(e) })], index);
+      fireWheel(el, p, e);
     }, { passive: false });
 
     win.addEventListener('keydown', (e) => {
       if (e.key === 'F11') return; // leave fullscreen toggle to the browser
       e.preventDefault();
       if (e.key !== 'Escape') lockKeys();
-      const k = { key: e.key, code: e.code, keyCode: e.keyCode, location: e.location, repeat: e.repeat };
+      const el = target();
+      if (!el) return;
+      const k = { key: e.key, code: e.code, location: e.location, repeat: e.repeat };
       viewer.pressed.set(e.code, k);
-      cdp([key('rawKeyDown', k, MODS(e))]);
+      fireKey(el, 'keydown', k, e);
     }, true);
     win.addEventListener('keyup', (e) => {
       if (e.key === 'F11') return;
       e.preventDefault();
+      const el = target();
+      if (!el) return;
       viewer.pressed.delete(e.code);
-      cdp([key('keyUp', { key: e.key, code: e.code, keyCode: e.keyCode, location: e.location }, MODS(e))]);
+      fireKey(el, 'keyup', { key: e.key, code: e.code, location: e.location }, e);
     }, true);
     // Losing focus mid-press would leave keys or buttons stuck on the remote machine.
     win.addEventListener('blur', () => {
-      const cmds = [...viewer.pressed.values()].map((k) => key('keyUp', k, 0));
-      viewer.pressed.clear();
-      if (viewer.buttons && viewer.lastDown) {
-        const u = getUnits().list[index];
-        if (u) {
-          const r = contentRect(u.el);
-          cmds.push(mouse({ type: 'mouseReleased', x: r.left + 1, y: r.top + 1, button: viewer.lastDown.button, buttons: 0, clickCount: 1 }));
+      const el = target();
+      if (el) {
+        for (const k of viewer.pressed.values()) fireKey(el, 'keyup', k, {});
+        if (viewer.buttons && viewer.lastPoint) {
+          BUTTON_BITS.forEach((bit, button) => {
+            if (viewer.buttons & bit) fireMouse(el, 'mouseup', viewer.lastPoint, { buttons: 0 }, button);
+          });
         }
-        viewer.buttons = 0;
       }
-      if (cmds.length) cdp(cmds, index);
+      viewer.pressed.clear();
+      viewer.buttons = 0;
     });
     win.addEventListener('resize', () => { viewer.sig = ''; viewer.update(); });
     win.addEventListener('pagehide', () => { viewers.delete(index); afterViewersChanged(); });
@@ -520,7 +464,6 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   }
 
   function afterViewersChanged() {
-    if (!viewers.size) send({ type: 'detach' });
     renderPanel(true);
   }
 
@@ -639,7 +582,6 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     <label class="check"><input type="checkbox" id="kl"> Gửi cả phím hệ thống (Win, Alt+Tab, Alt+F4, Ctrl+W…)</label>
     <div class="hint" id="klHint">Bấm chuột hoặc gõ phím vào cửa sổ để bật. Cửa sổ sẽ vào toàn màn hình; giữ Esc để thoát.</div>
     <div class="actions"><button id="openAll" class="primary">Mở tất cả</button><button id="closeAll">Đóng tất cả</button></div>
-    <div class="hint">Chrome sẽ hiện thanh "đang gỡ lỗi trình duyệt này" khi có cửa sổ mở: đó là cách extension gửi chuột/bàn phím cho CRD. Đừng bấm Hủy trên thanh đó.</div>
     <div class="hint">Để "Mở tất cả" mở được nhiều cửa sổ cùng lúc, hãy cho phép cửa sổ bật lên (popup) cho trang này.</div>
   </div>
 </div>`;
