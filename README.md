@@ -60,3 +60,5 @@ Bình thường Windows và Chrome xử lý các tổ hợp này trước khi tr
 | `manifest.json` | Khai báo extension (Manifest V3) |
 | `background.js` | Liệt kê màn hình cục bộ, đặt vị trí và toàn màn hình cho popup |
 | `content.js` | Bảng điều khiển, tìm các màn hình từ xa, cửa sổ xem, đổi tọa độ input |
+| `icons/` | Icon của extension (16, 32, 48, 128 px) |
+| `tools/make_icons.py` | Script vẽ lại icon (cần Python + Pillow) |
