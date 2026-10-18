@@ -242,6 +242,8 @@
   // display in the CRD tab, all cells are stacked in one cell sized to that display:
   // the chosen one visible on top, the others transparent underneath. The hidden
   // canvases keep their real size and position, so input aimed at them still works.
+  // The stacking is isolated inside the grid so CRD's own overlays (the side-panel
+  // arrow) still paint above the displays.
 
   let layoutStyle = null;
   let layoutActive = false;
@@ -275,7 +277,7 @@
     const s = Math.min(innerWidth / m.W, innerHeight / m.H);
     const w = (m.W * s).toFixed(2) + 'px', h = (m.H * s).toFixed(2) + 'px';
     layoutStyle.textContent = `
-[data-crdmm-grid]{width:${w}!important;height:${h}!important;grid-template-columns:100%!important;grid-template-rows:100%!important}
+[data-crdmm-grid]{width:${w}!important;height:${h}!important;grid-template-columns:100%!important;grid-template-rows:100%!important;isolation:isolate!important}
 [data-crdmm-unit]{grid-area:1/1/2/2!important;width:${w}!important;height:${h}!important;position:relative!important;z-index:1!important;opacity:0!important}
 [data-crdmm-unit] canvas{width:${w}!important;height:${h}!important}
 [data-crdmm-unit="${idx}"]{z-index:2!important;opacity:1!important}`;
