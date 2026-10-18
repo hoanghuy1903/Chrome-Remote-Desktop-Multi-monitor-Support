@@ -33,7 +33,6 @@
   const viewers = new Map(); // index -> viewer
   let panelHost = null;
   let ui = null;
-  let panelHidden = false;
 
   // ---------------------------------------------------------------- helpers
 
@@ -502,7 +501,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       if (!u) {
         viewer.geom = null;
         showMsg(list.length
-          ? `CRD hiện chỉ có ${list.length} màn hình. Đóng cửa sổ này hoặc đổi bố cục trong bảng điều khiển.`
+          ? `CRD hiện chỉ có ${list.length} màn hình. Đóng cửa sổ này hoặc đổi bố cục trong mục Multi-Monitor (bảng bên của CRD).`
           : 'Đang chờ hình từ Chrome Remote Desktop…');
         return;
       }
@@ -544,7 +543,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     // itself is fullscreen (requestFullscreen, not F11), which needs a click or key press.
     const lockKeys = () => {
       if (!settings.keyboardLock) {
-        showNote('Phím hệ thống chưa được khóa: ô "Gửi cả phím hệ thống" trong bảng điều khiển đang tắt.');
+        showNote('Phím hệ thống chưa được khóa: ô "Gửi cả phím hệ thống" trong mục Multi-Monitor đang tắt.');
         return;
       }
       const kb = win.navigator.keyboard;
@@ -691,30 +690,31 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   window.addEventListener('pagehide', closeAll);
 
   // ---------------------------------------------------------------- control panel
+  //
+  // The controls live in a "Multi-Monitor" section of CRD's own side panel, built
+  // from CRD's section classes so it looks and collapses like the native ones, and
+  // re-inserted if CRD re-renders the panel. The controls themselves sit in a shadow
+  // root, styled from CRD's text color so they follow its light/dark theme.
 
   const PANEL_CSS = `
-:host{all:initial}
-.panel{--bg:#fff;--fg:#202124;--muted:#5f6368;--line:#dadce0;--acc:#1a73e8;--acc-fg:#fff;--field:#f8f9fa;
-  width:320px;background:var(--bg);color:var(--fg);font:13px/1.45 system-ui,"Segoe UI",sans-serif;
-  border:1px solid var(--line);border-radius:12px;box-shadow:0 8px 28px rgba(0,0,0,.22);overflow:hidden}
-@media (prefers-color-scheme:dark){.panel{--bg:#202124;--fg:#e8eaed;--muted:#9aa0a6;--line:#3c4043;--acc:#8ab4f8;--acc-fg:#202124;--field:#292a2d}}
-header{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--line);cursor:default}
-.collapsed header{border-bottom:0}
-.dot{width:8px;height:8px;border-radius:50%;background:#9aa0a6}.dot.on{background:#34a853}
-b{font-weight:600}.sp{flex:1}
+:host{display:block;color:inherit;font:inherit}
+.panel{--muted:color-mix(in srgb,currentColor 62%,transparent);--line:color-mix(in srgb,currentColor 22%,transparent);
+  --field:color-mix(in srgb,currentColor 7%,transparent);--acc:var(--crdmm-acc,#8ab4f8);--acc-fg:var(--crdmm-acc-fg,#202124);
+  font-size:13px;line-height:1.45}
+b{font-weight:600}
 button{font:inherit;color:inherit;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
 button:hover{border-color:var(--acc)}
 button.primary{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
-button.icon{padding:0;width:24px;height:24px;line-height:22px;text-align:center}
-.body{padding:10px 12px;display:grid;grid-template-columns:minmax(0,1fr);gap:9px;max-height:70vh;overflow:auto}
-.collapsed .body{display:none}
+.body{padding:4px 0 12px;display:grid;grid-template-columns:minmax(0,1fr);gap:9px}
 [hidden]{display:none!important}
 .status{color:var(--muted)}
-.status.warn{color:#e37400}
+.status.warn{color:#f29900}
 .row{display:flex;align-items:center;gap:8px;justify-content:space-between}
 select,input,textarea{font:inherit;color:inherit;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:4px 6px}
+option{color:#202124;background:#fff}
 select{max-width:180px}
 input[type=number]{width:60px}
+input[type=checkbox]{accent-color:var(--acc);width:16px;height:16px;margin:0}
 textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,monospace;font-size:12px;resize:vertical}
 .hint{color:var(--muted);font-size:12px}
 .mon{border:1px solid var(--line);border-radius:8px;padding:8px;display:grid;gap:6px}
@@ -722,25 +722,34 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
 .mon .dim{color:var(--muted);font-size:12px}
 .mon select{max-width:none;flex:1;min-width:0;width:0}
 .mon button{flex:none}
-.check{display:flex;gap:6px;align-items:center}
+.check{display:flex;gap:8px;align-items:center}
 .actions{display:flex;gap:8px}.actions button{flex:1}
-.toast{background:#fce8e6;color:#a50e0e;border-radius:6px;padding:6px 8px;font-size:12px}
-@media (prefers-color-scheme:dark){.toast{background:#5c2b29;color:#f6aea9}}
+.toast{background:rgba(242,139,130,.18);color:#f28b82;border-radius:6px;padding:6px 8px;font-size:12px}
 `;
 
+  let section = null;
+
   function buildPanel() {
-    panelHost = document.createElement('div');
-    panelHost.style.cssText = 'position:fixed;inset:auto 16px 16px auto;margin:0;padding:0;border:0;'
-      + 'background:transparent;overflow:visible;z-index:2147483647;display:none';
-    // A popover lives in the top layer, so the panel stays visible when CRD goes fullscreen.
-    if (typeof panelHost.showPopover === 'function') panelHost.popover = 'manual';
+    section = document.createElement('section');
+    section.className = 'MboOLb';
+    section.id = 'crdmm-section';
+    section.setAttribute('role', 'region');
+    section.setAttribute('aria-label', 'Multi-Monitor');
+    section.innerHTML = `
+<div class="p1H7kc" tabindex="0" role="button" aria-label="Show/hide section: Multi-Monitor">
+  <div class="ZznB6">Multi-Monitor</div>
+  <div class="UdYC5e" title="Show/hide section"><span class="DPvwYc" aria-hidden="true">&#xE316;</span></div>
+</div>
+<div class="Hyjxyd"><div id="crdmm-host"></div></div>`;
+    const header = section.querySelector('.p1H7kc');
+    const toggle = () => { settings.collapsed = !settings.collapsed; save(); applyCollapsed(); };
+    header.addEventListener('click', toggle);
+    header.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); toggle(); } });
+
+    panelHost = section.querySelector('#crdmm-host');
     const root = panelHost.attachShadow({ mode: 'open' });
     root.innerHTML = `<style>${PANEL_CSS}</style>
-<div class="panel">
-  <header><span class="dot"></span><b>CRD Multi-Monitor</b><span class="sp"></span>
-    <button class="icon" id="collapse" title="Thu gọn / mở rộng">–</button>
-    <button class="icon" id="hide" title="Ẩn (Alt+Shift+M)">×</button></header>
-  <div class="body">
+<div class="panel"><div class="body">
     <div class="status" id="status"></div>
     <label class="row" id="mainRow">Tab này hiển thị
       <select id="main"></select></label>
@@ -767,17 +776,14 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     <button id="winFs" title="Alt+Shift+F">Toàn màn hình tab này (Alt+Shift+F)</button>
     <div class="hint">Dùng nút này thay cho nút Full-screen của CRD: chế độ toàn màn hình của CRD bị Chrome tắt mỗi khi bạn bấm vào popup.</div>
     <div class="hint">Để "Mở tất cả" mở được nhiều cửa sổ cùng lúc, hãy cho phép cửa sổ bật lên (popup) cho trang này.</div>
-  </div>
-</div>`;
+</div></div>`;
     const $ = (id) => root.getElementById(id);
     ui = {
-      root, panel: root.querySelector('.panel'), dot: root.querySelector('.dot'),
+      root, panel: root.querySelector('.panel'),
       status: $('status'), toast: $('toast'), layoutBox: $('layoutBox'), layout: $('layout'),
       count: $('count'), countRow: $('countRow'), custom: $('custom'), customRow: $('customRow'),
       list: $('list'), fs: $('fs'), kl: $('kl'), klHint: $('klHint'), main: $('main'), mainRow: $('mainRow'), sig: '', mainSig: '',
     };
-    $('collapse').onclick = () => { settings.collapsed = !settings.collapsed; save(); applyVisibility(); };
-    $('hide').onclick = () => { panelHidden = true; applyVisibility(); };
     $('openAll').onclick = openAll;
     // The click is a user gesture, so the page fullscreen + keyboard lock can start now.
     $('winFs').onclick = () => send({ type: 'windowFullscreen' }).then((r) => r && setWindowFullscreen(r.on));
@@ -800,12 +806,52 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
       settings.assignments = { ...settings.assignments, [sel.dataset.i]: sel.value };
       save();
     });
-    // Keep keystrokes and clicks in the panel away from the remote session.
-    for (const t of ['keydown', 'keyup', 'keypress', 'mousedown', 'pointerdown', 'wheel']) {
-      ui.panel.addEventListener(t, (e) => e.stopPropagation());
+    // Keep keystrokes and clicks in the section away from the remote session.
+    for (const t of ['keydown', 'keyup', 'keypress', 'mousedown', 'mouseup', 'pointerdown', 'wheel']) {
+      section.addEventListener(t, (e) => e.stopPropagation());
     }
-    document.documentElement.appendChild(panelHost);
     syncFields();
+    applyCollapsed();
+  }
+
+  // CRD's side panel: the container holding its sections.
+  function findSidePanel() {
+    const displays = document.querySelector('section[aria-label="Displays"]');
+    return document.querySelector('[jsname="j19Rqc"]') || (displays && displays.parentElement);
+  }
+
+  // Put the section after CRD's "Displays" section (again, if CRD re-rendered).
+  function ensureSection() {
+    if (!section || section.isConnected) return;
+    const box = findSidePanel();
+    if (!box) return;
+    const displays = box.querySelector(':scope > section[aria-label="Displays"]');
+    if (displays) displays.after(section); else box.appendChild(section);
+    // Match CRD's theme: its text color says whether the panel is dark or light.
+    const rgb = (getComputedStyle(box).color.match(/\d+/g) || [238, 238, 238]).map(Number);
+    const lightText = rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114 > 128;
+    panelHost.style.setProperty('--crdmm-acc', lightText ? '#8ab4f8' : '#1a73e8');
+    panelHost.style.setProperty('--crdmm-acc-fg', lightText ? '#202124' : '#fff');
+  }
+
+  // Same as CRD: a class on the section (turns the chevron) plus display:none on the body.
+  function applyCollapsed() {
+    if (!section) return;
+    section.classList.toggle('q3lLfc', settings.collapsed);
+    section.querySelector('.Hyjxyd').style.display = settings.collapsed ? 'none' : '';
+  }
+
+  // Open CRD's side panel and bring the section into view (extension icon / Alt+Shift+M).
+  function revealSection() {
+    ensureSection();
+    if (!section || !section.isConnected) { notify('Chưa thấy bảng bên của CRD. Hãy kết nối tới máy từ xa trước.'); return; }
+    if (settings.collapsed) { settings.collapsed = false; save(); applyCollapsed(); }
+    if (!section.getBoundingClientRect().width) {
+      const arrow = document.querySelector('span.DPvwYc.A469B');
+      const opener = arrow && (arrow.closest('[jsaction]') || arrow.parentElement);
+      if (opener) opener.click();
+    }
+    setTimeout(() => section.scrollIntoView({ block: 'nearest', behavior: 'smooth' }), 300);
   }
 
   function syncFields() {
@@ -818,42 +864,38 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     ui.klHint.hidden = !settings.keyboardLock;
   }
 
-  // Shown on session pages right away (so its status line explains what's missing),
-  // elsewhere only once a remote picture appears.
-  let seenSource = /\/session/.test(location.pathname);
-  const isVisible = () => !!panelHost && !panelHidden && seenSource;
-  function applyVisibility() {
-    if (!panelHost) return;
-    const show = isVisible();
-    panelHost.style.display = show ? 'block' : 'none';
-    if (panelHost.popover) {
-      try {
-        if (panelHost.matches(':popover-open')) panelHost.hidePopover();
-        if (show) panelHost.showPopover();
-      } catch {}
-    }
-    ui.panel.classList.toggle('collapsed', settings.collapsed);
-  }
-  // Re-raise the panel above a newly fullscreened element.
-  document.addEventListener('fullscreenchange', applyVisibility);
-
+  // Messages that need attention even with the side panel closed: shown in the
+  // section and, briefly, as a small floating notice.
   let toastTimer = 0;
-  function toast(text) {
-    if (!ui) return;
-    seenSource = true; panelHidden = false; applyVisibility();
-    ui.toast.textContent = text; ui.toast.hidden = false;
+  let notice = null;
+  function notify(text) {
+    if (ui) { ui.toast.textContent = text; ui.toast.hidden = false; }
+    if (!notice) {
+      notice = document.createElement('div');
+      notice.style.cssText = 'position:fixed;inset:auto auto 24px 50%;transform:translateX(-50%);margin:0;max-width:60vw;'
+        + 'padding:10px 16px;border:0;border-radius:8px;background:#3c4043;color:#fff;'
+        + 'font:13px/1.45 system-ui,"Segoe UI",sans-serif;box-shadow:0 4px 16px rgba(0,0,0,.3);z-index:2147483647';
+      if (typeof notice.showPopover === 'function') notice.popover = 'manual'; // stays above fullscreen content
+      document.documentElement.appendChild(notice);
+    }
+    notice.textContent = text;
+    notice.style.display = 'block';
+    try { if (notice.popover && !notice.matches(':popover-open')) notice.showPopover(); } catch {}
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => { ui.toast.hidden = true; }, 8000);
+    toastTimer = setTimeout(() => {
+      if (ui) ui.toast.hidden = true;
+      try { if (notice.popover) notice.hidePopover(); } catch {}
+      notice.style.display = 'none';
+    }, 8000);
   }
+  const toast = notify;
 
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
   function renderPanel(force = false) {
     if (!ui) return;
     const { mode, list, W, H } = getUnits();
-    if (list.length && !seenSource) { seenSource = true; applyVisibility(); }
 
-    ui.dot.classList.toggle('on', list.length > 0);
     ui.layoutBox.hidden = mode !== 'single';
     ui.mainRow.hidden = mode !== 'multi';
     const mainSig = list.length + ':' + settings.mainDisplay;
@@ -943,21 +985,14 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
   chrome.runtime.onMessage.addListener((msg) => {
     if (msg.type === 'windowFullscreen') setWindowFullscreen(msg.on);
     if (msg.type !== 'togglePanel') return;
-    if (isVisible()) {
-      panelHidden = true;
-    } else {
-      seenSource = true;
-      panelHidden = false;
-      settings.collapsed = false;
-      save();
-    }
-    applyVisibility(); renderPanel(true);
+    revealSection();
+    renderPanel(true);
   });
 
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes[KEY]) return;
     settings = { ...DEFAULTS, ...changes[KEY].newValue };
-    syncFields(); applyVisibility(); refreshAll();
+    syncFields(); applyCollapsed(); refreshAll();
   });
 
   async function loadDisplays() {
@@ -972,11 +1007,11 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     } catch {}
     await loadDisplays();
     buildPanel();
-    applyVisibility();
+    ensureSection();
     applyMainLayout();
     renderPanel(true);
     window.addEventListener('resize', applyMainLayout);
-    console.info('[CRD-MM] v1.1 sẵn sàng · màn hình cục bộ:', displays.length);
+    console.info('[CRD-MM] sẵn sàng · màn hình cục bộ:', displays.length);
 
     let tick = 0;
     setInterval(() => {
@@ -986,6 +1021,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
         v.update();
       }
       applyMainLayout();
+      ensureSection();
       if (tick % 2 === 0) renderPanel();
       if (tick % 10 === 0) loadDisplays();
     }, 500);

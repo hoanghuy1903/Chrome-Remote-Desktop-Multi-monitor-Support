@@ -23,13 +23,13 @@ Sau mỗi lần sửa file: bấm nút tải lại ↻ ở thẻ extension, **r�
 
 1. Kết nối tới máy từ xa trên `remotedesktop.google.com`.
 2. Mở bảng bên của CRD → **Displays** → chọn **Show all displays**.
-3. Bảng **CRD Multi-Monitor** hiện ở góc dưới bên phải. Bật/tắt bằng biểu tượng extension hoặc **Alt+Shift+M**.
+3. Mở bảng bên của CRD (mũi tên ở mép phải): mục **Multi-Monitor** nằm ngay dưới mục Displays. Bấm biểu tượng extension hoặc **Alt+Shift+M** để mở thẳng tới mục này.
 4. Với mỗi "Màn hình từ xa", chọn màn hình trên máy bạn sẽ hiển thị nó, rồi bấm **Mở** (hoặc **Mở tất cả**).
 5. Thoát toàn màn hình bằng **F11** (hoặc **giữ Esc** nếu đang khóa phím hệ thống, xem dưới). Đóng popup như một cửa sổ bình thường.
 
 ### Toàn màn hình cho tab CRD
 
-Dùng nút **"Toàn màn hình tab này"** trong bảng điều khiển hoặc phím **Alt+Shift+F**. Nếu ô **"Tự bật toàn màn hình khi mở"** được chọn, bấm **Mở tất cả** cũng tự đưa tab này vào toàn màn hình. Đừng dùng nút Full-screen của CRD hay phím F11, vì:
+Dùng nút **"Toàn màn hình tab này"** trong mục Multi-Monitor hoặc phím **Alt+Shift+F**. Nếu ô **"Tự bật toàn màn hình khi mở"** được chọn, bấm **Mở tất cả** cũng tự đưa tab này vào toàn màn hình. Đừng dùng nút Full-screen của CRD hay phím F11, vì:
 
 - Nút Full-screen của CRD dùng chế độ toàn màn hình của trang. Chrome tự tắt chế độ này mỗi khi bạn bấm vào một popup do trang đó mở (quy tắc an ninh của Chrome), nên màn 1 sẽ bị thoát.
 - Trong phiên CRD, phím F11 được gửi sang máy từ xa chứ không tới Chrome trên máy bạn.
@@ -38,7 +38,7 @@ Dùng nút **"Toàn màn hình tab này"** trong bảng điều khiển hoặc p
 
 ### Giữ một màn hình ở tab CRD
 
-Ô **"Tab này hiển thị"** trong bảng (mặc định: *Chỉ màn hình từ xa 1*) cho tab CRD chỉ hiện một màn hình, phóng to vừa tab. Các màn hình còn lại chỉ xem qua popup; **Mở tất cả** sẽ bỏ qua màn hình đang ở tab.
+Ô **"Tab này hiển thị"** trong mục Multi-Monitor (mặc định: *Chỉ màn hình từ xa 1*) cho tab CRD chỉ hiện một màn hình, phóng to vừa tab. Các màn hình còn lại chỉ xem qua popup; **Mở tất cả** sẽ bỏ qua màn hình đang ở tab.
 
 - Trên tab CRD bạn thao tác như CRD gốc.
 - Các màn hình kia vẫn nằm trong tab nhưng trong suốt, ngay dưới màn hình đang hiện. Input từ popup được gửi thẳng vào canvas của màn hình đó, nên không ảnh hưởng đến màn hình đang hiện.
@@ -46,7 +46,7 @@ Dùng nút **"Toàn màn hình tab này"** trong bảng điều khiển hoặc p
 
 ### Phím hệ thống (Win, Alt+Tab, Alt+F4, Ctrl+W…)
 
-Bình thường Windows và Chrome xử lý các tổ hợp này trước khi trang web nhận được. Khi bật **"Gửi cả phím hệ thống"** trong bảng (mặc định bật), popup dùng Keyboard Lock API để giữ chúng lại và gửi sang máy từ xa.
+Bình thường Windows và Chrome xử lý các tổ hợp này trước khi trang web nhận được. Khi bật **"Gửi cả phím hệ thống"** trong mục Multi-Monitor (mặc định bật), popup dùng Keyboard Lock API để giữ chúng lại và gửi sang máy từ xa.
 
 - Keyboard Lock chỉ hoạt động khi trang ở chế độ toàn màn hình của trang (không phải F11). Vì vậy lần đầu bạn bấm chuột hoặc gõ phím vào popup, popup sẽ tự vào chế độ đó.
 - Muốn thoát: **giữ Esc** khoảng 2 giây. Nhấn Esc ngắn vẫn được gửi sang máy từ xa.

@@ -14,7 +14,7 @@
     "128": "icons/icon128.png"
   },
   "action": {
-    "default_title": "CRD Multi-Monitor: hiện/ẩn bảng điều khiển",
+    "default_title": "CRD Multi-Monitor: mở mục Multi-Monitor trong bảng bên của CRD",
     "default_icon": {
       "16": "icons/icon16.png",
       "32": "icons/icon32.png"
@@ -23,7 +23,7 @@
   "commands": {
     "toggle-panel": {
       "suggested_key": { "default": "Alt+Shift+M" },
-      "description": "Hiện/ẩn bảng điều khiển Multi-Monitor"
+      "description": "Mở mục Multi-Monitor trong bảng bên của CRD"
     },
     "toggle-window-fullscreen": {
       "suggested_key": { "default": "Alt+Shift+F" },
