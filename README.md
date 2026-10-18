@@ -2,6 +2,8 @@
 
 A Chrome extension that lets Chrome Remote Desktop (the web client at `remotedesktop.google.com`) show **each display of the remote computer on its own screen of your computer**.
 
+> Unofficial. Not affiliated with or endorsed by Google. Chrome Remote Desktop is a trademark of Google LLC. The extension relies on CRD's current page structure and may break when Google updates it.
+
 ## How it works
 
 1. With **Show all displays**, CRD receives a separate WebRTC video stream for each remote display and paints each one into its own `<canvas>`, side by side in the tab.
@@ -74,3 +76,7 @@ Normally Windows and Chrome handle these combinations before the web page sees t
 | `content.js` | Side-panel section, finds the remote displays, viewer windows, input mapping |
 | `icons/` | Extension icons (16, 32, 48, 128 px) |
 | `tools/make_icons.py` | Redraws the icons (needs Python + Pillow) |
+
+## License
+
+[MIT](LICENSE)
