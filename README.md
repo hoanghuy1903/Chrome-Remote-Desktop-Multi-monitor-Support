@@ -29,7 +29,7 @@ Sau mỗi lần sửa file: bấm nút tải lại ↻ ở thẻ extension, **r�
 
 ### Toàn màn hình cho tab CRD
 
-Dùng nút **"Toàn màn hình tab này"** trong bảng điều khiển hoặc phím **Alt+Shift+F**, đừng dùng nút Full-screen của CRD hay phím F11:
+Dùng nút **"Toàn màn hình tab này"** trong bảng điều khiển hoặc phím **Alt+Shift+F**. Nếu ô **"Tự bật toàn màn hình khi mở"** được chọn, bấm **Mở tất cả** cũng tự đưa tab này vào toàn màn hình. Đừng dùng nút Full-screen của CRD hay phím F11, vì:
 
 - Nút Full-screen của CRD dùng chế độ toàn màn hình của trang. Chrome tự tắt chế độ này mỗi khi bạn bấm vào một popup do trang đó mở (quy tắc an ninh của Chrome), nên màn 1 sẽ bị thoát.
 - Trong phiên CRD, phím F11 được gửi sang máy từ xa chứ không tới Chrome trên máy bạn.

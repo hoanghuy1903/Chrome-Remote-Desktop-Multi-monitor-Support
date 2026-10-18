@@ -550,6 +550,8 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       const kb = win.navigator.keyboard;
       // lock() is cheap to repeat, and the popup may already be fullscreen without a
       // lock (e.g. entered before the option was turned on), so always ask for it.
+      const ua = win.navigator.userActivation;
+      if (!doc.fullscreenElement && ua && !ua.isActive) return; // needs a click or key press
       (doc.fullscreenElement ? Promise.resolve() : doc.documentElement.requestFullscreen({ navigationUI: 'hide' }))
         .then(() => {
           if (!kb || !kb.lock) throw new Error('trình duyệt không hỗ trợ Keyboard Lock');
@@ -675,6 +677,9 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   async function openAll() {
     const n = getUnits().list.length;
     if (!n) { toast('Chưa thấy hình. Hãy kết nối tới máy từ xa trước.'); return; }
+    // With "fullscreen on open", the CRD tab goes fullscreen too (window level, so
+    // focusing the popups doesn't end it).
+    if (settings.fullscreen) send({ type: 'windowFullscreen', on: true }).then((r) => r && setWindowFullscreen(r.on));
     for (let i = 0; i < n; i++) {
       if (layoutActive && i === settings.mainDisplay) continue; // already shown in this tab
       if (!(await openViewer(i))) break;
@@ -755,7 +760,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
       </div>
     </div>
     <div id="list"></div>
-    <label class="check"><input type="checkbox" id="fs"> Tự bật toàn màn hình khi mở</label>
+    <label class="check"><input type="checkbox" id="fs"> Tự bật toàn màn hình khi mở (cả tab này khi bấm "Mở tất cả")</label>
     <label class="check"><input type="checkbox" id="kl"> Gửi cả phím hệ thống (Win, Alt+Tab, Alt+F4, Ctrl+W…)</label>
     <div class="hint" id="klHint">Bấm chuột hoặc gõ phím vào cửa sổ để bật. Cửa sổ sẽ vào toàn màn hình; giữ Esc để thoát.</div>
     <div class="actions"><button id="openAll" class="primary">Mở tất cả</button><button id="closeAll">Đóng tất cả</button></div>
@@ -775,7 +780,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     $('hide').onclick = () => { panelHidden = true; applyVisibility(); };
     $('openAll').onclick = openAll;
     // The click is a user gesture, so the page fullscreen + keyboard lock can start now.
-    $('winFs').onclick = () => send({ type: 'toggleWindowFullscreen' }).then((r) => r && setWindowFullscreen(r.on));
+    $('winFs').onclick = () => send({ type: 'windowFullscreen' }).then((r) => r && setWindowFullscreen(r.on));
     $('closeAll').onclick = closeAll;
     ui.layout.onchange = () => { settings.layout = ui.layout.value; save(); refreshAll(); };
     ui.count.onchange = () => { settings.count = clamp(parseInt(ui.count.value, 10) || 1, 1, 8); save(); refreshAll(); };
@@ -917,8 +922,12 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
   // on the next click or key press in this tab.
 
   let windowFullscreen = false;
+  // True when this window covers its whole screen, whatever made it so.
+  const windowCoversScreen = () => Math.abs(window.outerWidth - screen.width) < 2 && Math.abs(window.outerHeight - screen.height) < 2;
   function lockTabKeys() {
-    if (!windowFullscreen || document.fullscreenElement) return;
+    if (!windowFullscreen || document.fullscreenElement || !windowCoversScreen()) return;
+    // requestFullscreen needs a click or key press; without one Chrome logs an error.
+    if (navigator.userActivation && !navigator.userActivation.isActive) return;
     document.documentElement.requestFullscreen({ navigationUI: 'hide' })
       .then(() => navigator.keyboard && navigator.keyboard.lock && navigator.keyboard.lock())
       .catch(() => {});
