@@ -414,23 +414,35 @@
       const r = contentRect(u.el);
       // In single-video mode all units share one element; show each unit's crop.
       const fx = r.width / u.W, fy = r.height / u.H;
-      out.push({ index: i, inTab: true,
-        left: mo.x + r.left + u.rect.x * fx, top: mo.y + r.top + u.rect.y * fy, width: u.rect.w * fx, height: u.rect.h * fy });
+      const s = { index: i, inTab: true,
+        left: mo.x + r.left + u.rect.x * fx, top: mo.y + r.top + u.rect.y * fy, width: u.rect.w * fx, height: u.rect.h * fy };
+      // A tab showing a single display owns its letterbox bars too.
+      if (layoutActive) s.frame = { left: mo.x, top: mo.y, width: innerWidth, height: innerHeight };
+      out.push(s);
     });
     for (const v of viewers.values()) {
       const u = list[v.index];
       if (v.win.closed || !v.geom || !u) continue;
       const o = v.origin || estimateOrigin(v.win);
       out.push({ index: v.index, inTab: false,
-        left: o.x + v.geom.offX, top: o.y + v.geom.offY, width: u.rect.w * v.geom.s, height: u.rect.h * v.geom.s });
+        left: o.x + v.geom.offX, top: o.y + v.geom.offY, width: u.rect.w * v.geom.s, height: u.rect.h * v.geom.s,
+        frame: { left: o.x, top: o.y, width: v.win.innerWidth, height: v.win.innerHeight } });
     }
     return out;
   }
 
   // Screen point -> { el, p } to dispatch on in the CRD tab, or null if no display is there.
+  // A point in a surface's letterbox bars (e.g. a 16:9 display on a 16:10 screen) is
+  // clamped onto the picture's edge: pushing a dragged window to the very top of the
+  // screen must land on the remote display's top edge (maximize), not miss it and
+  // fall back to the CRD tab's display corner (quarter snap).
+  const inside = (r, x, y) => x >= r.left && y >= r.top && x < r.left + r.width && y < r.top + r.height;
   function locateOnScreen(sx, sy) {
-    for (const s of surfaces()) {
-      if (sx < s.left || sy < s.top || sx >= s.left + s.width || sy >= s.top + s.height) continue;
+    const all = surfaces();
+    const s = all.find((t) => inside(t, sx, sy)) || all.find((t) => t.frame && inside(t.frame, sx, sy));
+    if (s) {
+      sx = clamp(sx, s.left, s.left + s.width - 0.01);
+      sy = clamp(sy, s.top, s.top + s.height - 0.01);
       const u = getUnits().list[s.index];
       const rx = u.rect.x + ((sx - s.left) / s.width) * u.rect.w;
       const ry = u.rect.y + ((sy - s.top) / s.height) * u.rect.h;
