@@ -268,6 +268,7 @@
       layoutStyle.id = 'crdmm-layout';
       (document.head || document.documentElement).appendChild(layoutStyle);
     }
+    markLetterbox(ok ? grid : null);
     if (!ok) { layoutStyle.textContent = ''; return; }
 
     containers.forEach((c, i) => { c.dataset.crdmmUnit = String(i); });
@@ -279,8 +280,24 @@
 [data-crdmm-grid]{width:${w}!important;height:${h}!important;grid-template-columns:100%!important;grid-template-rows:100%!important;isolation:isolate!important}
 [data-crdmm-unit]{grid-area:1/1/2/2!important;width:${w}!important;height:${h}!important;position:relative!important;z-index:1!important;opacity:0!important}
 [data-crdmm-unit] canvas{width:${w}!important;height:${h}!important}
-[data-crdmm-unit="${idx}"]{z-index:2!important;opacity:1!important}`;
+[data-crdmm-unit="${idx}"]{z-index:2!important;opacity:1!important}
+[data-crdmm-black]{background:#000!important}`;
     updateCursor();
+  }
+
+  // The bars beside a single display (aspect ratio differs from the tab) show CRD's
+  // gray background; paint every box from the grid up to the one filling the tab
+  // black, like the popups.
+  let letterboxed = [];
+  function markLetterbox(grid) {
+    for (const el of letterboxed) delete el.dataset.crdmmBlack;
+    letterboxed = [];
+    for (let el = grid; el && el !== document.body; el = el.parentElement) {
+      el.dataset.crdmmBlack = '';
+      letterboxed.push(el);
+      const r = el.getBoundingClientRect();
+      if (r.width >= innerWidth - 1 && r.height >= innerHeight - 1) break;
+    }
   }
 
   // ---------------------------------------------------------------- remote cursor
