@@ -29,6 +29,8 @@ After changing any file: click the reload button ↻ on the extension's card, **
 4. For each "Remote display", pick the local screen to show it on, then click **Open** (or **Open all**).
 5. Close a pop-up like any other window. To leave a pop-up's fullscreen while system keys are captured, **hold Esc** for about 2 seconds.
 
+<p align="center"><img src="docs/side-panel.png" width="360" alt="The Multi-Monitor section in CRD's side panel, below Displays: which display this tab shows, one row per remote display with the local screen to open it on, fullscreen and system-key options, and the Open all / Close all / Fullscreen this tab buttons"></p>
+
 Dragging a window across displays works in both directions (CRD tab → pop-up and back): while a mouse button is held, the extension follows the pointer onto whichever display is under it.
 
 ### Fullscreen for the CRD tab
