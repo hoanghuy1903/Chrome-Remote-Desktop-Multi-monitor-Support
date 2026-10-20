@@ -75,6 +75,14 @@ async function setWindowFullscreen(windowId, on) {
   if (on) {
     restore[windowId] = win.state === 'fullscreen' || win.state === 'minimized' ? 'maximized' : win.state;
     await setRestore(restore);
+    // Leaving fullscreen with Chrome's own "X" brings the window back in its normal
+    // (non-maximized) bounds before we can re-maximize it, which shows as a jump. Make
+    // those normal bounds the maximized ones first, so the way back looks seamless.
+    if (win.state === 'maximized') {
+      await chrome.windows.update(windowId, {
+        state: 'normal', left: win.left, top: win.top, width: win.width, height: win.height,
+      }).catch(() => {});
+    }
     await chrome.windows.update(windowId, { state: 'fullscreen' });
   } else {
     const state = restore[windowId];
