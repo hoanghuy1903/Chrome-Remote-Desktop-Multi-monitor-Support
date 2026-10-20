@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CRD Multi-Monitor",
-  "version": "1.2.1",
+  "version": "1.2.2",
   "description": "Show each remote display of a Chrome Remote Desktop session in its own window, one per local screen.",
   "permissions": ["storage", "system.display"],
   "background": {
