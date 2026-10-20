@@ -728,7 +728,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   const PANEL_CSS = `
 :host{display:block;color:inherit;font:inherit}
 .panel{--muted:color-mix(in srgb,currentColor 62%,transparent);--line:color-mix(in srgb,currentColor 22%,transparent);
-  --field:color-mix(in srgb,currentColor 7%,transparent);--acc:var(--crdmm-acc,#8ab4f8);--acc-fg:var(--crdmm-acc-fg,#202124);
+  --field:var(--crdmm-field,#000);--acc:#1e88e5;--acc-fg:#fff;
   font-size:13px;line-height:1.45}
 b{font-weight:600}
 button{font:inherit;color:inherit;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
@@ -856,11 +856,17 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     if (!box) return;
     const displays = box.querySelector(':scope > section[aria-label="Displays"]');
     if (displays) displays.after(section); else box.appendChild(section);
-    // Match CRD's theme: its text color says whether the panel is dark or light.
-    const rgb = (getComputedStyle(box).color.match(/\d+/g) || [238, 238, 238]).map(Number);
-    const lightText = rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114 > 128;
-    panelHost.style.setProperty('--crdmm-acc', lightText ? '#8ab4f8' : '#1a73e8');
-    panelHost.style.setProperty('--crdmm-acc-fg', lightText ? '#202124' : '#fff');
+    syncTheme();
+  }
+
+  // Buttons and fields use the fill of CRD's own buttons ("Upload file" / "Download file"),
+  // black in the dark theme, so they follow its theme.
+  function syncTheme() {
+    const box = findSidePanel();
+    if (!box || !panelHost) return;
+    const native = [...box.querySelectorAll('button,[role="button"]')]
+      .find((b) => !section.contains(b) && /^(upload|download) file$/i.test((b.textContent || '').trim()));
+    if (native) panelHost.style.setProperty('--crdmm-field', getComputedStyle(native).backgroundColor);
   }
 
   // Same as CRD's own sections: a class on the section (turns the chevron) and a
@@ -1068,6 +1074,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
       }
       applyMainLayout();
       ensureSection();
+      if (tick % 4 === 0) syncTheme();
       if (tick % 2 === 0) renderPanel();
       if (tick % 10 === 0) loadDisplays();
     }, 500);
