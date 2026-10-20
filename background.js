@@ -93,14 +93,20 @@ async function notifyWindowFullscreen(windowId, on) {
   for (const t of tabs) chrome.tabs.sendMessage(t.id, { type: 'windowFullscreen', on }, () => void chrome.runtime.lastError);
 }
 
-// Left fullscreen some other way (window closed, OS, Chrome dropping it).
+// Left fullscreen some other way (Chrome's round "X" exit button, the OS, Chrome
+// dropping it). Chrome then tends to come back as a normal window even if it was
+// maximized before, so put back the state we saved.
 chrome.windows.onBoundsChanged.addListener(async (win) => {
   const restore = await getRestore();
   if (!(String(win.id) in restore)) return;
   const w = await chrome.windows.get(win.id).catch(() => null);
   if (w && w.state === 'fullscreen') return;
+  const state = restore[win.id];
   delete restore[win.id];
   await setRestore(restore);
+  if (w && w.state === 'normal' && state && state !== 'normal') {
+    await chrome.windows.update(win.id, { state }).catch(() => {});
+  }
   notifyWindowFullscreen(win.id, false);
 });
 chrome.windows.onRemoved.addListener(async (id) => {
