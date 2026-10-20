@@ -731,9 +731,11 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   --field:var(--crdmm-field,#000);--acc:#1e88e5;--acc-fg:#fff;
   font-size:13px;line-height:1.45}
 b{font-weight:600}
-button{font:inherit;color:inherit;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer}
-button:hover{border-color:var(--acc)}
+button{font:inherit;color:inherit;background:var(--field);border:1px solid var(--line);border-radius:6px;padding:5px 10px;cursor:pointer;
+  transition:var(--crdmm-transition,background-color 200ms ease)}
+button:hover{background:var(--crdmm-hover,#182b3b)}
 button.primary{background:var(--acc);color:var(--acc-fg);border-color:var(--acc)}
+button.primary:hover{background:var(--acc);filter:brightness(1.12)}
 .body{padding:4px 0 12px;display:grid;grid-template-columns:minmax(0,1fr);gap:9px}
 [hidden]{display:none!important}
 .status{color:var(--muted)}
@@ -866,7 +868,31 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     if (!box || !panelHost) return;
     const native = [...box.querySelectorAll('button,[role="button"]')]
       .find((b) => !section.contains(b) && /^(upload|download) file$/i.test((b.textContent || '').trim()));
-    if (native) panelHost.style.setProperty('--crdmm-field', getComputedStyle(native).backgroundColor);
+    if (!native) return;
+    const st = getComputedStyle(native);
+    const set = (name, value) => (value ? panelHost.style.setProperty(name, value) : panelHost.style.removeProperty(name));
+    set('--crdmm-field', st.backgroundColor);
+    // Hover fill and transition, as CRD's buttons have them. Lists of values (one per
+    // property) are skipped, since the shorthand can't be rebuilt from them reliably.
+    const single = (v) => v && !/,(?![^()]*\))/.test(v);
+    set('--crdmm-transition', parseFloat(st.transitionDuration) > 0 && single(st.transitionDuration) && single(st.transitionTimingFunction)
+      ? `background-color ${st.transitionDuration} ${st.transitionTimingFunction}${parseFloat(st.transitionDelay) ? ' ' + st.transitionDelay : ''}` : '');
+    set('--crdmm-hover', nativeHoverFill(native));
+  }
+
+  // The background a ":hover" rule gives this button, read from CRD's own stylesheets.
+  function nativeHoverFill(el) {
+    for (const sheet of document.styleSheets) {
+      let rules;
+      try { rules = sheet.cssRules; } catch { continue; } // cross-origin sheet
+      for (const r of rules) {
+        if (!r.selectorText || !r.selectorText.includes(':hover') || !r.style.backgroundColor) continue;
+        try {
+          if (el.matches(r.selectorText.replace(/:hover/g, ''))) return r.style.backgroundColor;
+        } catch {}
+      }
+    }
+    return '';
   }
 
   // Same as CRD's own sections: a class on the section (turns the chevron) and a
