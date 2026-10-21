@@ -1,4 +1,4 @@
-# CRD Multi-Monitor
+# Multi-Monitor for Remote Desktop
 
 A Chrome extension that lets Chrome Remote Desktop (the web client at `remotedesktop.google.com`) show **each display of the remote computer on its own screen of your computer**.
 
@@ -78,6 +78,9 @@ Normally Windows and Chrome handle these combinations before the web page sees t
 | `content.js` | Side-panel section, finds the remote displays, viewer windows, input mapping |
 | `icons/` | Extension icons (16, 32, 48, 128 px) |
 | `tools/make_icons.py` | Redraws the icons (needs Python + Pillow) |
+| `tools/make_store_assets.py` | Renders the Chrome Web Store screenshot and promo tile into `docs/store/` |
+| `docs/store-listing.md` | Texts to paste into the Chrome Web Store Developer Dashboard |
+| `PRIVACY.md` | Privacy policy |
 
 ## License
 

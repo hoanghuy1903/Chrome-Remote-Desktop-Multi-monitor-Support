@@ -40,7 +40,7 @@ async function placeWindow(windowId, { bounds, fullscreen }) {
       await chrome.windows.update(windowId, { state: 'fullscreen', focused: true });
     }
   } catch (e) {
-    console.warn('CRD Multi-Monitor: could not place the window', e);
+    console.warn('Multi-Monitor for Remote Desktop: could not place the window', e);
   }
 }
 

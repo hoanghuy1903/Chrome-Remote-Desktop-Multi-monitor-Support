@@ -1,4 +1,4 @@
-// CRD Multi-Monitor — content script for remotedesktop.google.com
+// Multi-Monitor for Remote Desktop — content script for remotedesktop.google.com
 //
 // With "Show all displays", CRD receives one WebRTC video per remote monitor and
 // paints each into its own <canvas>, side by side. We open one popup per remote
