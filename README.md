@@ -2,6 +2,8 @@
 
 A Chrome extension that lets Chrome Remote Desktop (the web client at `remotedesktop.google.com`) show **each display of the remote computer on its own screen of your computer**.
 
+**[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/multi-monitor-for-remote/ldjmbmefclhfjankpofbgfpdidoemmmi)**
+
 > Unofficial. Not affiliated with or endorsed by Google. Chrome Remote Desktop is a trademark of Google LLC. The extension relies on CRD's current page structure and may break when Google updates it.
 
 ## How it works
@@ -14,6 +16,10 @@ A Chrome extension that lets Chrome Remote Desktop (the web client at `remotedes
 If CRD shows a single stitched picture instead (older versions or another layout), the extension cuts it into regions according to the **Layout** setting.
 
 ## Installation
+
+Install it from the **[Chrome Web Store](https://chromewebstore.google.com/detail/multi-monitor-for-remote/ldjmbmefclhfjankpofbgfpdidoemmmi)**. Chrome keeps it up to date.
+
+### From source (for development)
 
 1. Open `chrome://extensions`.
 2. Turn on **Developer mode** (top right).
