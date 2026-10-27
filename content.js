@@ -257,7 +257,7 @@
     const ok = mode === 'multi' && idx >= 0 && idx < list.length && grid
       && containers.every((c) => c && c.parentElement === grid);
 
-    const sig = ok ? JSON.stringify([idx, innerWidth, innerHeight, list[idx].W, list[idx].H, list.map((u) => idOf(u.el))]) : '';
+    const sig = ok ? JSON.stringify([idx, innerWidth, innerHeight, list.map((u) => [idOf(u.el), u.W, u.H])]) : '';
     if (sig === layoutSig) return;
     layoutSig = sig;
     layoutActive = ok;
@@ -273,13 +273,20 @@
 
     containers.forEach((c, i) => { c.dataset.crdmmUnit = String(i); });
     grid.dataset.crdmmGrid = '';
-    const m = list[idx];
-    const s = Math.min(innerWidth / m.W, innerHeight / m.H);
-    const w = (m.W * s).toFixed(2) + 'px', h = (m.H * s).toFixed(2) + 'px';
+    // Each display keeps its own shape (a portrait display next to a landscape one
+    // must not be stretched), fitted into the tab and centered in the shared cell.
+    const fit = (u) => {
+      const k = Math.min(innerWidth / u.W, innerHeight / u.H);
+      return [(u.W * k).toFixed(2) + 'px', (u.H * k).toFixed(2) + 'px'];
+    };
+    const [w, h] = fit(list[idx]);
     layoutStyle.textContent = `
 [data-crdmm-grid]{width:${w}!important;height:${h}!important;grid-template-columns:100%!important;grid-template-rows:100%!important;isolation:isolate!important}
-[data-crdmm-unit]{grid-area:1/1/2/2!important;width:${w}!important;height:${h}!important;position:relative!important;z-index:1!important;opacity:0!important}
-[data-crdmm-unit] canvas{width:${w}!important;height:${h}!important}
+[data-crdmm-unit]{grid-area:1/1/2/2!important;place-self:center!important;position:relative!important;z-index:1!important;opacity:0!important}
+${list.map((u, i) => {
+    const [uw, uh] = fit(u);
+    return `[data-crdmm-unit="${i}"],[data-crdmm-unit="${i}"] canvas{width:${uw}!important;height:${uh}!important}`;
+  }).join('\n')}
 [data-crdmm-unit="${idx}"]{z-index:2!important;opacity:1!important}
 [data-crdmm-black]{background:#000!important}`;
     updateCursor();
