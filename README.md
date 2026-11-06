@@ -10,7 +10,7 @@ A Chrome extension that lets Chrome Remote Desktop (the web client at `remotedes
 
 1. With **Show all displays**, CRD receives a separate WebRTC video stream for each remote display and paints each one into its own `<canvas>`, side by side in the tab.
 2. The extension pairs every canvas with the video stream that feeds it (by comparing small thumbnails) and opens one pop-up window per remote display that plays that stream directly. Nothing is re-encoded, so the picture keeps its full quality.
-3. Each pop-up is moved to the local screen you pick (via `chrome.windows` + `chrome.system.display`) and can go fullscreen automatically.
+3. Each pop-up is moved to the local screen you pick (via `chrome.windows` + `chrome.system.display`) and goes fullscreen together with the CRD tab in Fullscreen Mode.
 4. Mouse, wheel and keyboard input in a pop-up is mapped to the matching canvas in the CRD tab and dispatched there as ordinary DOM events. CRD works out the display from the canvas that receives the event and the position from that canvas's rect, and doesn't check whether events are trusted, so they reach the remote computer like real input. No debugger permission is needed, so Chrome shows no warning bar.
 
 If CRD shows a single stitched picture instead (older versions or another layout), the extension cuts it into regions according to the **Layout** setting.
@@ -33,15 +33,15 @@ After changing any file: click the reload button ↻ on the extension's card, **
 2. Open CRD's side panel (the arrow on the right edge) → **Displays** → choose **Show all displays**.
 3. The **Multi-Monitor** section sits right below **Displays** in the same side panel. The extension icon or **Alt+Shift+M** opens the side panel straight at it.
 4. For each "Remote display", pick the local screen to show it on, then click **Open** (or **Open all**).
-5. Close a pop-up like any other window. To leave a pop-up's fullscreen while system keys are captured, **hold Esc** for about 2 seconds.
+5. Close a pop-up like any other window. To leave Fullscreen Mode while system keys are captured, **hold Esc** for about 2 seconds.
 
-<p align="center"><img src="docs/side-panel.png" width="360" alt="The Multi-Monitor section in CRD's side panel, below Displays: which display this tab shows, one row per remote display with the local screen to open it on, fullscreen and system-key options, and the Open all / Close all / Fullscreen this tab buttons"></p>
+<p align="center"><img src="docs/side-panel.png" width="360" alt="The Multi-Monitor section in CRD's side panel, below Displays: which display this tab shows, one row per remote display with the local screen to open it on, fullscreen and system-key options, and the Open all / Close all / Enter Fullscreen Mode buttons"></p>
 
 Dragging a window across displays works in both directions (CRD tab → pop-up and back): while a mouse button is held, the extension follows the pointer onto whichever display is under it.
 
-### Fullscreen for the CRD tab
+### Fullscreen Mode
 
-Use **"Fullscreen this tab"** in the Multi-Monitor section or **Alt+Shift+F**. With **"Go fullscreen when opening"** checked, **Open all** also puts this tab into fullscreen. Don't use CRD's own Full-screen button or F11:
+Use **Enter Fullscreen Mode** in the Multi-Monitor section or **Alt+Shift+F**. The CRD tab and all pop-ups go fullscreen together and leave it together (the same button, now **Exit Fullscreen Mode**, Alt+Shift+F again, Chrome's round X on any of them, or holding Esc). Pop-ups opened while the mode is on open fullscreen, and the mode is remembered for the next session. Clicking into a window never changes its size by itself. Don't use CRD's own Full-screen button or F11:
 
 - CRD's Full-screen button uses the page's own fullscreen. Chrome ends it whenever you click into a pop-up opened by that page (a Chrome security rule), so the main display would drop out of fullscreen.
 - During a CRD session, F11 is sent to the remote computer, not to Chrome on yours.
@@ -60,9 +60,9 @@ Use **"Fullscreen this tab"** in the Multi-Monitor section or **Alt+Shift+F**. W
 
 Normally Windows and Chrome handle these combinations before the web page sees them. With **"Send system keys"** on in the Multi-Monitor section (the default), the pop-ups use the Keyboard Lock API to capture them and send them to the remote computer.
 
-- Keyboard Lock only works while the page is in its own fullscreen (not F11), so the first click or key press in a pop-up puts it into that mode. A notice in the middle of the pop-up says whether the keys are captured.
-- To get out: **hold Esc** for about 2 seconds. A short Esc press is still sent to the remote computer.
-- While captured, Alt+Tab and Win act on the remote computer. To switch to another window on your computer, use the mouse or leave fullscreen first.
+- Keyboard Lock only works while the page is in its own fullscreen (not F11), so keys are captured only in **Fullscreen Mode**, from the first click or key press in a window. A notice in the middle of the pop-up says whether the keys are captured.
+- To leave Fullscreen Mode: **hold Esc** for about 2 seconds. A short Esc press is still sent to the remote computer.
+- While captured, Alt+Tab and Win act on the remote computer. To switch to another window on your computer, use the mouse or leave Fullscreen Mode first.
 - **Ctrl+Alt+Del** can never be captured, because Windows reserves it. Use **Press Ctrl+Alt+Del** in CRD's side panel.
 
 > One click may open only one pop-up. For **Open all** to open several windows at once, click the blocked pop-up icon in the address bar and choose **Always allow**.
@@ -73,7 +73,7 @@ Normally Windows and Chrome handle these combinations before the web page sees t
 - **Mouse/keyboard in a pop-up does nothing**: reload the CRD tab (F5). If it still doesn't work, Google may have changed how CRD handles input, and `content.js` needs updating.
 - **The CRD tab must stay open** (it can sit on another screen or behind the pop-ups). Don't minimize it.
 - Browser zoom on the CRD tab other than 100% breaks cross-display drags.
-- Not supported yet: relative mouse mode, clipboard sync through the pop-ups.
+- Copying on the remote computer while a pop-up has focus works (the text reaches your clipboard). Not supported yet: relative mouse mode.
 
 ## Files
 
@@ -82,6 +82,7 @@ Normally Windows and Chrome handle these combinations before the web page sees t
 | `manifest.json` | Extension manifest (Manifest V3) |
 | `background.js` | Lists local screens, places pop-ups, window-level fullscreen |
 | `content.js` | Side-panel section, finds the remote displays, viewer windows, input mapping |
+| `page-hook.js` | Runs in the CRD page itself: passes text copied on the remote computer to your clipboard while a pop-up has focus, keeps the side panel's scroll position |
 | `icons/` | Extension icons (16, 32, 48, 128 px) |
 | `PRIVACY.md` | Privacy policy |
 

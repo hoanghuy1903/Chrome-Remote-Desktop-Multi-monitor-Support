@@ -22,7 +22,7 @@
     layout: 'auto',      // single-video mode only: auto | columns | rows | custom
     count: 2,
     custom: '',
-    fullscreen: true,
+    fullscreenMode: false, // shared by this tab and the pop-ups, remembered between sessions
     keyboardLock: true,  // capture Win, Alt+Tab, Ctrl+W… in viewers (needs page fullscreen)
     mainDisplay: 0,      // remote display kept in the CRD tab itself (-1 = show all, like stock CRD)
     assignments: {},     // remote display index -> local display id ('none' = don't place)
@@ -379,7 +379,20 @@ ${list.map((u, i) => {
   }
 
   const BUTTON_BITS = [1, 4, 2, 8, 16]; // MouseEvent.button -> MouseEvent.buttons bit
-  const mods = (e) => ({ ctrlKey: !!e.ctrlKey, shiftKey: !!e.shiftKey, altKey: !!e.altKey, metaKey: !!e.metaKey });
+  // Lock keys matter too: CRD sends the CapsLock/NumLock state with every key event and
+  // the host syncs to it, so a re-dispatched event without them would turn CapsLock off.
+  // Synthetic releases (on blur) have no real event to read from: reuse the last known state.
+  let locks = { modifierCapsLock: false, modifierNumLock: false, modifierScrollLock: false };
+  const mods = (e) => {
+    if (e.getModifierState) {
+      locks = {
+        modifierCapsLock: e.getModifierState('CapsLock'),
+        modifierNumLock: e.getModifierState('NumLock'),
+        modifierScrollLock: e.getModifierState('ScrollLock'),
+      };
+    }
+    return { ctrlKey: !!e.ctrlKey, shiftKey: !!e.shiftKey, altKey: !!e.altKey, metaKey: !!e.metaKey, ...locks };
+  };
 
   function fireMouse(el, type, p, e, button = 0) {
     wakeCrd(el);
@@ -577,9 +590,16 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     // Keys like Win, Alt+Tab, Alt+F4 or Ctrl+W normally go to Windows or Chrome before
     // the page sees them. The Keyboard Lock API captures them, but only while the page
     // itself is fullscreen (requestFullscreen, not F11), which needs a click or key press.
+    // That page fullscreen is only layered on a window that Fullscreen Mode has already
+    // made fullscreen, so clicking into a pop-up never changes its size.
     const lockKeys = () => {
       if (!settings.keyboardLock) {
         showNote('System keys aren\'t captured: "Send system keys" is off in the Multi-Monitor section.');
+        return;
+      }
+      const covers = Math.abs(win.outerWidth - win.screen.width) < 2 && Math.abs(win.outerHeight - win.screen.height) < 2;
+      if (!settings.fullscreenMode || !covers) {
+        showNote('System keys go to this computer. Use "Enter Fullscreen Mode" in the Multi-Monitor section to send them to the remote one.');
         return;
       }
       const kb = win.navigator.keyboard;
@@ -641,6 +661,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     win.addEventListener('keydown', (e) => {
       if (e.key === 'F11') return; // leave fullscreen toggle to the browser
       e.preventDefault();
+      if (e.key === 'Escape' && !e.repeat) viewer.escDown = performance.now();
       if (e.key !== 'Escape' && !doc.fullscreenElement) lockKeys();
       const el = target();
       if (!el) return;
@@ -651,6 +672,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     win.addEventListener('keyup', (e) => {
       if (e.key === 'F11') return;
       e.preventDefault();
+      if (e.key === 'Escape') viewer.escDown = 0;
       const el = target();
       if (!el) return;
       viewer.pressed.delete(e.code);
@@ -671,6 +693,11 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       viewer.buttons = 0;
     });
     win.addEventListener('resize', () => { viewer.sig = ''; viewer.update(); });
+    // Holding Esc ends the page fullscreen that keyboard lock needs. Treat that as
+    // leaving Fullscreen Mode, for every window, as the hint in the panel says.
+    doc.addEventListener('fullscreenchange', () => {
+      if (!doc.fullscreenElement && heldEsc(viewer.escDown)) { viewer.escDown = 0; setFullscreenMode(false); }
+    });
     win.addEventListener('pagehide', () => { viewers.delete(index); afterViewersChanged(); });
 
     viewer.update();
@@ -687,13 +714,16 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     if (!getUnits().list.length) { toast('No remote picture yet. Connect to the remote computer first.'); return false; }
 
     const disp = displayFor(index);
-    if (disp) await send({ type: 'expectViewer', bounds: disp.bounds, fullscreen: settings.fullscreen });
+    // In Fullscreen Mode, this tab is fullscreen too (window level, so focusing the
+    // pop-ups doesn't end it) and the pop-up opens fullscreen.
+    if (settings.fullscreenMode) send({ type: 'fullscreenMode', on: true });
+    await send({ type: 'expectViewer', bounds: disp ? disp.bounds : null, fullscreen: settings.fullscreenMode });
     const b = disp ? disp.bounds
       : { left: window.screenX + 40 * (index + 1), top: window.screenY + 40 * (index + 1), width: 1280, height: 720 };
     const win = window.open('', 'crdmm_viewer_' + index,
       `popup=yes,left=${b.left},top=${b.top},width=${b.width},height=${b.height}`);
     if (!win) {
-      if (disp) send({ type: 'cancelExpect' });
+      send({ type: 'cancelExpect' });
       toast('Chrome blocked the pop-up. Click the blocked pop-up icon in the address bar → "Always allow".');
       return false;
     }
@@ -712,9 +742,6 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
   async function openAll() {
     const n = getUnits().list.length;
     if (!n) { toast('No remote picture yet. Connect to the remote computer first.'); return; }
-    // With "fullscreen on open", the CRD tab goes fullscreen too (window level, so
-    // focusing the popups doesn't end it).
-    if (settings.fullscreen) send({ type: 'windowFullscreen', on: true }).then((r) => r && setWindowFullscreen(r.on));
     for (let i = 0; i < n; i++) {
       if (layoutActive && i === settings.mainDisplay) continue; // already shown in this tab
       if (!(await openViewer(i))) break;
@@ -807,12 +834,11 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
       </div>
     </div>
     <div id="list"></div>
-    <label class="check"><input type="checkbox" id="fs"> Go fullscreen when opening (this tab too on "Open all")</label>
     <label class="check"><input type="checkbox" id="kl"> Send system keys (Win, Alt+Tab, Alt+F4, Ctrl+W…)</label>
-    <div class="hint" id="klHint">Click or press a key in a window to turn it on. The window goes fullscreen; hold Esc to exit.</div>
+    <div class="hint" id="klHint">In Fullscreen Mode: click or press a key in a window to capture them. Hold Esc to leave Fullscreen Mode.</div>
     <div class="actions"><button id="openAll" class="primary">Open all</button><button id="closeAll">Close all</button></div>
-    <button id="winFs" title="Alt+Shift+F">Fullscreen this tab (Alt+Shift+F)</button>
-    <div class="hint">Use this instead of CRD's Full-screen button: Chrome ends CRD's own fullscreen whenever you click into a pop-up.</div>
+    <button id="winFs" title="Alt+Shift+F">Enter Fullscreen Mode</button>
+    <div class="hint">This tab and all pop-ups go fullscreen and leave it together, and windows opened later follow (remembered next time too). Use this instead of CRD's Full-screen button: Chrome ends CRD's own fullscreen whenever you click into a pop-up.</div>
     <div class="hint">For "Open all" to open several windows at once, allow pop-ups for this site.</div>
 </div></div>`;
     const $ = (id) => root.getElementById(id);
@@ -820,16 +846,15 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
       root, panel: root.querySelector('.panel'),
       status: $('status'), toast: $('toast'), layoutBox: $('layoutBox'), layout: $('layout'),
       count: $('count'), countRow: $('countRow'), custom: $('custom'), customRow: $('customRow'),
-      list: $('list'), fs: $('fs'), kl: $('kl'), klHint: $('klHint'), main: $('main'), mainRow: $('mainRow'), sig: '', mainSig: '',
+      list: $('list'), winFs: $('winFs'), kl: $('kl'), klHint: $('klHint'), main: $('main'), mainRow: $('mainRow'), sig: '', mainSig: '',
     };
     $('openAll').onclick = openAll;
     // The click is a user gesture, so the page fullscreen + keyboard lock can start now.
-    $('winFs').onclick = () => send({ type: 'windowFullscreen' }).then((r) => r && setWindowFullscreen(r.on));
+    $('winFs').onclick = () => setFullscreenMode(!settings.fullscreenMode);
     $('closeAll').onclick = closeAll;
     ui.layout.onchange = () => { settings.layout = ui.layout.value; save(); refreshAll(); };
     ui.count.onchange = () => { settings.count = clamp(parseInt(ui.count.value, 10) || 1, 1, 8); save(); refreshAll(); };
     ui.custom.oninput = () => { settings.custom = ui.custom.value; save(); refreshAll(); };
-    ui.fs.onchange = () => { settings.fullscreen = ui.fs.checked; save(); };
     ui.main.onchange = () => { settings.mainDisplay = +ui.main.value; save(); refreshAll(); };
     ui.kl.onchange = () => { settings.keyboardLock = ui.kl.checked; ui.klHint.hidden = !ui.kl.checked; save(); };
     ui.list.addEventListener('click', (e) => {
@@ -923,6 +948,30 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     collapseTimer = setTimeout(() => { body.style.cssText = collapse ? 'height:0px;display:none' : ''; }, 200);
   }
 
+  // CRD hides its side panel with display:none while it is closed, which throws away
+  // the panel's scroll position. Remember it and put it back as the panel is shown,
+  // before it is painted (ResizeObserver runs between layout and paint). CRD's own
+  // scroll to the top on opening is stopped in page-hook.js.
+  let panelScroller = null, panelScroll = 0, panelShown = false;
+  const panelObserver = new ResizeObserver(() => {
+    const sc = panelScroller;
+    if (!sc) return;
+    const shown = sc.clientHeight > 0;
+    if (shown && !panelShown) sc.scrollTop = panelScroll;
+    panelShown = shown;
+  });
+  function watchPanelScroll() {
+    const box = findSidePanel();
+    let sc = box;
+    while (sc && sc !== document.body && !/(auto|scroll)/.test(getComputedStyle(sc).overflowY)) sc = sc.parentElement;
+    if (!sc || sc === document.body || sc === panelScroller) return;
+    if (panelScroller) panelObserver.unobserve(panelScroller);
+    panelScroller = sc;
+    panelShown = sc.clientHeight > 0;
+    panelObserver.observe(sc);
+    sc.addEventListener('scroll', () => { if (sc.clientHeight) panelScroll = sc.scrollTop; }, { passive: true });
+  }
+
   // Open CRD's side panel and bring the section into view (extension icon / Alt+Shift+M).
   function revealSection() {
     ensureSection();
@@ -941,7 +990,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     ui.layout.value = settings.layout;
     ui.count.value = settings.count;
     ui.custom.value = settings.custom;
-    ui.fs.checked = settings.fullscreen;
+    ui.winFs.textContent = settings.fullscreenMode ? 'Exit Fullscreen Mode' : 'Enter Fullscreen Mode';
     ui.kl.checked = settings.keyboardLock;
     ui.klHint.hidden = !settings.keyboardLock;
   }
@@ -1045,27 +1094,51 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
   // viewer gets focus. So the page fullscreen + lock is layered on top and re-entered
   // on the next click or key press in this tab.
 
-  let windowFullscreen = false;
+  // Fullscreen Mode: this tab's window and all pop-ups are fullscreen together
+  // (background.js does the windows). The mode is remembered in the settings.
+  function setFullscreenMode(on) {
+    applyFullscreenMode(on);
+    send({ type: 'fullscreenMode', on });
+  }
+  function applyFullscreenMode(on) {
+    if (settings.fullscreenMode !== on) { settings.fullscreenMode = on; save(); }
+    syncFields();
+    if (on) lockTabKeys();
+    else {
+      if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
+      for (const v of viewers.values()) {
+        const d = !v.win.closed && v.win.document;
+        if (d && d.fullscreenElement) d.exitFullscreen().catch(() => {});
+      }
+    }
+  }
   // True when this window covers its whole screen, whatever made it so.
   const windowCoversScreen = () => Math.abs(window.outerWidth - screen.width) < 2 && Math.abs(window.outerHeight - screen.height) < 2;
   function lockTabKeys() {
-    if (!windowFullscreen || document.fullscreenElement || !windowCoversScreen()) return;
+    if (!settings.fullscreenMode || !settings.keyboardLock || document.fullscreenElement || !windowCoversScreen()) return;
     // requestFullscreen needs a click or key press; without one Chrome logs an error.
     if (navigator.userActivation && !navigator.userActivation.isActive) return;
     document.documentElement.requestFullscreen({ navigationUI: 'hide' })
       .then(() => navigator.keyboard && navigator.keyboard.lock && navigator.keyboard.lock())
       .catch(() => {});
   }
-  function setWindowFullscreen(on) {
-    windowFullscreen = on;
-    if (on) lockTabKeys();
-    else if (document.fullscreenElement) document.exitFullscreen().catch(() => {});
-  }
+  // Chrome also ends the page fullscreen by itself (e.g. when a pop-up gets focus), so
+  // only a page fullscreen that ends while Esc is held means the user wants out.
+  const heldEsc = (since) => since > 0 && performance.now() - since > 1000;
+  let tabEscDown = 0;
   window.addEventListener('pointerdown', (e) => { if (e.isTrusted) lockTabKeys(); }, true);
-  window.addEventListener('keydown', (e) => { if (e.isTrusted && e.key !== 'Escape') lockTabKeys(); }, true);
+  window.addEventListener('keydown', (e) => {
+    if (!e.isTrusted) return;
+    if (e.key === 'Escape') { if (!e.repeat) tabEscDown = performance.now(); } else lockTabKeys();
+  }, true);
+  window.addEventListener('keyup', (e) => { if (e.key === 'Escape') tabEscDown = 0; }, true);
+  document.addEventListener('fullscreenchange', () => {
+    if (!document.fullscreenElement && settings.fullscreenMode && heldEsc(tabEscDown)) { tabEscDown = 0; setFullscreenMode(false); }
+  });
 
   chrome.runtime.onMessage.addListener((msg) => {
-    if (msg.type === 'windowFullscreen') setWindowFullscreen(msg.on);
+    if (msg.type === 'fullscreenMode') applyFullscreenMode(msg.on);
+    if (msg.type === 'toggleFullscreenMode') setFullscreenMode(!settings.fullscreenMode);
     if (msg.type !== 'togglePanel') return;
     revealSection();
     renderPanel(true);
@@ -1078,6 +1151,23 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     syncFields(); refreshAll();
     // Our own saves come back here too; don't cut a running collapse animation short.
     if (settings.collapsed !== wasCollapsed) applyCollapsed();
+  });
+
+  // Text CRD copies from the remote machine (see page-hook.js). CRD writes it with the
+  // page's Clipboard API, which fails while a pop-up has focus, so write it from the focused
+  // pop-up. Pop-ups are same-origin with this page, so they may use the Clipboard API too.
+  window.addEventListener('crdmm-clipboard', (e) => {
+    const text = e.detail;
+    if (typeof text !== 'string' || document.hasFocus()) return; // the tab can do it itself
+    const v = [...viewers.values()].find((x) => !x.win.closed && x.win.document.hasFocus());
+    if (!v) return;
+    const d = v.win.document;
+    v.win.navigator.clipboard.writeText(text).catch(() => {
+      const ta = d.createElement('textarea');
+      ta.value = text; d.body.appendChild(ta); ta.select();
+      try { d.execCommand('copy'); } catch {}
+      ta.remove();
+    });
   });
 
   async function loadDisplays() {
@@ -1107,6 +1197,7 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
       }
       applyMainLayout();
       ensureSection();
+      watchPanelScroll();
       if (tick % 4 === 0) syncTheme();
       if (tick % 2 === 0) renderPanel();
       if (tick % 10 === 0) loadDisplays();

@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Multi-Monitor for Remote Desktop",
-  "version": "1.2.5",
+  "version": "1.2.8",
   "description": "Works with Chrome Remote Desktop: show each remote display in its own window, one per local screen.",
   "permissions": ["storage", "system.display"],
   "background": {
@@ -27,10 +27,16 @@
     },
     "toggle-window-fullscreen": {
       "suggested_key": { "default": "Alt+Shift+F" },
-      "description": "Toggle fullscreen for the CRD tab's window"
+      "description": "Enter or exit Fullscreen Mode (the CRD tab and all pop-ups)"
     }
   },
   "content_scripts": [
+    {
+      "matches": ["https://remotedesktop.google.com/*"],
+      "js": ["page-hook.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
     {
       "matches": ["https://remotedesktop.google.com/*"],
       "js": ["content.js"],
