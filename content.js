@@ -782,6 +782,7 @@ input[type=number]{width:60px}
 input[type=checkbox]{accent-color:var(--acc);width:16px;height:16px;margin:0}
 textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,monospace;font-size:12px;resize:vertical}
 .hint{color:var(--muted);font-size:12px}
+#list{display:grid;gap:5px}
 .mon{border:1px solid var(--line);border-radius:8px;padding:8px;display:grid;gap:6px}
 .mon .top{display:flex;justify-content:space-between;align-items:center}
 .mon .dim{color:var(--muted);font-size:12px}
@@ -790,6 +791,15 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
 .check{display:flex;gap:8px;align-items:center}
 .actions{display:flex;gap:8px}.actions button{flex:1}
 .toast{background:rgba(242,139,130,.18);color:#f28b82;border-radius:6px;padding:6px 8px;font-size:12px}
+#winFs{position:relative;display:flex;align-items:center;justify-content:center;gap:6px}
+.info{flex:none;box-sizing:border-box;width:15px;height:15px;border-radius:50%;border:1px solid var(--muted);color:var(--muted);
+  display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;line-height:1;cursor:help}
+.info:hover{color:inherit;border-color:currentColor}
+.tip{display:none;position:absolute;right:-1px;bottom:calc(100% + 8px);z-index:10;width:max-content;max-width:280px;
+  text-align:left;font-size:12px;line-height:1.5;font-weight:400;cursor:default;pointer-events:none;
+  background:var(--field);border:1px solid var(--line);border-radius:6px;padding:8px 10px;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.tip span{display:block}.tip span::before{content:"\\2022\\00a0\\00a0"}
+.info:hover + .tip{display:block}
 `;
 
   let section = null;
@@ -835,28 +845,31 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     </div>
     <div id="list"></div>
     <label class="check"><input type="checkbox" id="kl"> Send system keys (Win, Alt+Tab, Alt+F4, Ctrl+W…)</label>
-    <div class="hint" id="klHint">In Fullscreen Mode: click or press a key in a window to capture them. Hold Esc to leave Fullscreen Mode.</div>
     <div class="actions"><button id="openAll" class="primary">Open all</button><button id="closeAll">Close all</button></div>
-    <button id="winFs" title="Alt+Shift+F">Enter Fullscreen Mode</button>
-    <div class="hint">This tab and all pop-ups go fullscreen and leave it together, and windows opened later follow (remembered next time too). Use this instead of CRD's Full-screen button: Chrome ends CRD's own fullscreen whenever you click into a pop-up.</div>
-    <div class="hint">For "Open all" to open several windows at once, allow pop-ups for this site.</div>
+    <button id="winFs"><span id="winFsLabel">Enter Fullscreen Mode</span><span class="info" aria-label="Help">i</span><span class="tip">
+      <span>Alt+Shift+F: this tab and all pop-ups together</span>
+      <span>Exit: hold Esc, or Alt+Shift+F</span>
+      <span>System keys: click a window in this mode</span>
+      <span>Don't use CRD's own Full-screen button</span>
+      <span>Open all: allow pop-ups for this site</span>
+    </span></button>
 </div></div>`;
     const $ = (id) => root.getElementById(id);
     ui = {
       root, panel: root.querySelector('.panel'),
       status: $('status'), toast: $('toast'), layoutBox: $('layoutBox'), layout: $('layout'),
       count: $('count'), countRow: $('countRow'), custom: $('custom'), customRow: $('customRow'),
-      list: $('list'), winFs: $('winFs'), kl: $('kl'), klHint: $('klHint'), main: $('main'), mainRow: $('mainRow'), sig: '', mainSig: '',
+      list: $('list'), winFsLabel: $('winFsLabel'), kl: $('kl'), main: $('main'), mainRow: $('mainRow'), sig: '', mainSig: '',
     };
     $('openAll').onclick = openAll;
     // The click is a user gesture, so the page fullscreen + keyboard lock can start now.
-    $('winFs').onclick = () => setFullscreenMode(!settings.fullscreenMode);
+    $('winFs').onclick = (e) => { if (!e.target.closest('.info')) setFullscreenMode(!settings.fullscreenMode); };
     $('closeAll').onclick = closeAll;
     ui.layout.onchange = () => { settings.layout = ui.layout.value; save(); refreshAll(); };
     ui.count.onchange = () => { settings.count = clamp(parseInt(ui.count.value, 10) || 1, 1, 8); save(); refreshAll(); };
     ui.custom.oninput = () => { settings.custom = ui.custom.value; save(); refreshAll(); };
     ui.main.onchange = () => { settings.mainDisplay = +ui.main.value; save(); refreshAll(); };
-    ui.kl.onchange = () => { settings.keyboardLock = ui.kl.checked; ui.klHint.hidden = !ui.kl.checked; save(); };
+    ui.kl.onchange = () => { settings.keyboardLock = ui.kl.checked; save(); };
     ui.list.addEventListener('click', (e) => {
       const btn = e.target.closest('button[data-i]');
       if (!btn) return;
@@ -990,9 +1003,8 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     ui.layout.value = settings.layout;
     ui.count.value = settings.count;
     ui.custom.value = settings.custom;
-    ui.winFs.textContent = settings.fullscreenMode ? 'Exit Fullscreen Mode' : 'Enter Fullscreen Mode';
+    ui.winFsLabel.textContent = settings.fullscreenMode ? 'Exit Fullscreen Mode' : 'Enter Fullscreen Mode';
     ui.kl.checked = settings.keyboardLock;
-    ui.klHint.hidden = !settings.keyboardLock;
   }
 
   // Messages that need attention even with the side panel closed: shown in the
