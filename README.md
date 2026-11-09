@@ -5,6 +5,8 @@ A Chrome extension that lets Chrome Remote Desktop (the web client at `remotedes
 **[Install from the Chrome Web Store](https://chromewebstore.google.com/detail/multi-monitor-for-remote/ldjmbmefclhfjankpofbgfpdidoemmmi)**
 
 > Unofficial. Not affiliated with or endorsed by Google. Chrome Remote Desktop is a trademark of Google LLC. The extension relies on CRD's current page structure and may break when Google updates it.
+>
+> **Tested setup:** two displays of the same resolution, side by side horizontally, on both the remote and the local computer. Other setups (three or more displays, different resolutions or scaling, displays stacked vertically or offset, portrait displays, a different number of displays on each side) may work but aren't tested: windows can land on the wrong screen, the picture can be cut or scaled wrongly, or the pointer can be off. Please [open an issue](https://github.com/hoanghuy1903/Chrome-Remote-Desktop-Multi-monitor-Support/issues) with your layout if something goes wrong.
 
 ## How it works
 
