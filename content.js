@@ -587,6 +587,28 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
 
     const target = () => { const u = getUnits().list[index]; return u ? u.el : null; };
 
+    // CRD sends mouse events without modifier flags: the remote computer only knows Ctrl
+    // (Shift, Alt, Win) is held from an earlier key press. That press is missing when the
+    // key went down in another window (CRD releases all keys when its tab loses focus) or
+    // its keyup was lost, so Ctrl+click would arrive as a plain click. Before each mouse
+    // or wheel event, bring the remote modifiers in line with the event's flags.
+    const MODIFIERS = [['ctrlKey', 'Control', 'ControlLeft'], ['shiftKey', 'Shift', 'ShiftLeft'],
+      ['altKey', 'Alt', 'AltLeft'], ['metaKey', 'Meta', 'MetaLeft']];
+    const syncModifiers = (el, e) => {
+      const held = [...viewer.pressed.values()];
+      if (held.some((k) => k.key === 'AltGraph')) return; // AltGr reports Ctrl+Alt
+      for (const [flag, key, code] of MODIFIERS) {
+        const down = held.filter((k) => k.key === key);
+        if (e[flag] && !down.length) {
+          const k = { key, code, location: 1 };
+          viewer.pressed.set(code, k);
+          fireKey(el, 'keydown', k, e);
+        } else if (!e[flag] && down.length) {
+          for (const k of down) { viewer.pressed.delete(k.code); fireKey(el, 'keyup', k, e); }
+        }
+      }
+    };
+
     // Keys like Win, Alt+Tab, Alt+F4 or Ctrl+W normally go to Windows or Chrome before
     // the page sees them. The Keyboard Lock API captures them, but only while the page
     // itself is fullscreen (requestFullscreen, not F11), which needs a click or key press.
@@ -603,8 +625,10 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
         return;
       }
       const kb = win.navigator.keyboard;
-      // lock() is cheap to repeat, and the popup may already be fullscreen without a
-      // lock (e.g. entered before the option was turned on), so always ask for it.
+      // Lock once per page fullscreen. Calling lock() again re-installs Chrome's key
+      // hook, which forgets keys being held: with Ctrl down, every click would release
+      // it on the remote computer, so Ctrl+click only worked once.
+      if (doc.fullscreenElement && viewer.keysLocked) return;
       const ua = win.navigator.userActivation;
       if (!doc.fullscreenElement && ua && !ua.isActive) return; // needs a click or key press
       (doc.fullscreenElement ? Promise.resolve() : doc.documentElement.requestFullscreen({ navigationUI: 'hide' }))
@@ -612,7 +636,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
           if (!kb || !kb.lock) throw new Error('this browser doesn\'t support Keyboard Lock');
           return kb.lock();
         })
-        .then(() => showNote('System keys captured · hold Esc to exit'))
+        .then(() => { viewer.keysLocked = true; showNote('System keys captured · hold Esc to exit'); })
         .catch((err) => showNote('Couldn\'t capture system keys: ' + (err && err.message || err)));
     };
 
@@ -632,6 +656,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       }
       viewer.lastPoint = p;
       viewer.lastEl = el;
+      if (e.type !== 'pointermove' || e.button >= 0) syncModifiers(el, e);
       if (e.type === 'pointerdown') {
         lockKeys();
         try { stage.setPointerCapture(e.pointerId); } catch {}
@@ -655,6 +680,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
       const p = toMain(e.clientX, e.clientY), el = target();
       if (!p || !el) return;
       e.preventDefault();
+      syncModifiers(el, e);
       fireWheel(el, p, e);
     }, { passive: false });
 
@@ -696,6 +722,7 @@ html,body{margin:0;height:100%;background:#000;overflow:hidden;user-select:none}
     // Holding Esc ends the page fullscreen that keyboard lock needs. Treat that as
     // leaving Fullscreen Mode, for every window, as the hint in the panel says.
     doc.addEventListener('fullscreenchange', () => {
+      if (!doc.fullscreenElement) viewer.keysLocked = false; // Chrome drops the lock with it
       if (!doc.fullscreenElement && heldEsc(viewer.escDown)) { viewer.escDown = 0; setFullscreenMode(false); }
     });
     win.addEventListener('pagehide', () => { viewers.delete(index); afterViewersChanged(); });
@@ -890,17 +917,23 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     applyCollapsed();
   }
 
-  // CRD's side panel: the container holding its sections.
+  // CRD's side panel: the container holding its sections. After a dropped connection
+  // CRD builds a new panel for the new session and may leave the old one in the page,
+  // so take the newest one that has a "Displays" section.
   function findSidePanel() {
-    const displays = document.querySelector('section[aria-label="Displays"]');
-    return document.querySelector('[jsname="j19Rqc"]') || (displays && displays.parentElement);
+    const boxes = [...document.querySelectorAll('[jsname="j19Rqc"]')];
+    const current = boxes.filter((b) => b.querySelector(':scope > section[aria-label="Displays"]')).pop() || boxes.pop();
+    if (current) return current;
+    const displays = [...document.querySelectorAll('section[aria-label="Displays"]')].pop();
+    return displays && displays.parentElement;
   }
 
-  // Put the section after CRD's "Displays" section (again, if CRD re-rendered).
+  // Put the section after CRD's "Displays" section (again, if CRD re-rendered or
+  // replaced its panel).
   function ensureSection() {
-    if (!section || section.isConnected) return;
+    if (!section) return;
     const box = findSidePanel();
-    if (!box) return;
+    if (!box || (section.isConnected && section.parentElement === box)) return;
     const displays = box.querySelector(':scope > section[aria-label="Displays"]');
     if (displays) displays.after(section); else box.appendChild(section);
     syncTheme();
@@ -1200,18 +1233,22 @@ textarea{width:100%;box-sizing:border-box;font-family:ui-monospace,Consolas,mono
     window.addEventListener('resize', applyMainLayout);
     console.info('[CRD-MM] ready · local screens:', displays.length);
 
+    // Each step runs on its own, so one that throws (e.g. while CRD tears down a
+    // dropped session) can't keep the others, like putting the section back, from running.
+    const step = (fn) => { try { fn(); } catch (e) { console.warn('[CRD-MM]', e); } };
     let tick = 0;
     setInterval(() => {
       tick++;
       for (const [i, v] of viewers) {
-        if (v.win.closed) { viewers.delete(i); afterViewersChanged(); continue; }
-        v.update();
+        step(() => {
+          if (v.win.closed) { viewers.delete(i); afterViewersChanged(); } else v.update();
+        });
       }
-      applyMainLayout();
-      ensureSection();
-      watchPanelScroll();
-      if (tick % 4 === 0) syncTheme();
-      if (tick % 2 === 0) renderPanel();
+      step(ensureSection);
+      step(watchPanelScroll);
+      step(applyMainLayout);
+      if (tick % 4 === 0) step(syncTheme);
+      if (tick % 2 === 0) step(renderPanel);
       if (tick % 10 === 0) loadDisplays();
     }, 500);
   }
